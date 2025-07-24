@@ -1,0 +1,37 @@
+<launch>
+
+  <!-- ###################### CAN BUS ###################### -->
+  <!-- This single node is the only one that talks to the CAN bus. -->
+  <node name="can_manager" pkg="motor_control" type="can_manager_node.py" output="screen">
+    <param name="can_channel" value="can0" />
+    <param name="can_bustype" value="socketcan" />
+  </node>
+
+  <!-- ################## MOTOR LOGIC NODES ################## -->
+  <!-- One logic node is launched for each motor. They do not access the CAN bus directly. -->
+
+  <!-- Right Hip Motor -->
+  <node name="hip_right_logic" pkg="motor_control" type="motor_logic_node.py" output="screen">
+    <param name="motor_name" value="hip_right" />
+    <param name="timeout" value="0.5" />
+  </node>
+
+  <!-- Right Knee Motor -->
+  <node name="knee_right_logic" pkg="motor_control" type="motor_logic_node.py" output="screen">
+    <param name="motor_name" value="knee_right" />
+    <param name="timeout" value="0.5" />
+  </node>
+
+  <!-- Left Hip Motor -->
+  <node name="hip_left_logic" pkg="motor_control" type="motor_logic_node.py" output="screen">
+    <param name="motor_name" value="hip_left" />
+    <param name="timeout" value="0.5" />
+  </node>
+
+  <!-- Left Knee Motor -->
+  <node name="knee_left_logic" pkg="motor_control" type="motor_logic_node.py" output="screen">
+    <param name="motor_name" value="knee_left" />
+    <param name="timeout" value="0.5" />
+  </node>
+
+</launch>
