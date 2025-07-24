@@ -1,0 +1,13 @@
+Header header
+float64 Rhip_pos_st
+float64 Rknee_pos_st
+float64 Rhip_vel_st
+float64 Rknee_vel_st
+float64 Rhip_tau_st
+float64 Rknee_tau_st
+float64 Lhip_pos_st
+float64 Lknee_pos_st
+float64 Lhip_vel_st
+float64 Lknee_vel_st
+float64 Lhip_tau_st
+float64 Lknee_tau_st

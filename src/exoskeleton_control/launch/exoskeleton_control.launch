@@ -1,0 +1,18 @@
+<launch>
+
+  <!-- Gait Planner Node -->
+  <node name="gait_planner_node" pkg="exoskeleton_control" type="gait_planner_node.py" output="screen"/>
+
+  <!-- Trajectory Generator Node -->
+  <node name="trajectory_generator_node" pkg="exoskeleton_control" type="trajectory_generator_node.py" output="screen"/>
+
+  <!-- Motor Control Node -->
+  <node name="motor_control_node" pkg="exoskeleton_control" type="motor_control_node.py" output="screen"/>
+
+  <!-- Emergency Stop Node -->
+  <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen"/>
+
+  <!-- Dummy Crutches Node -->
+  <node name="dummy_crutches" pkg="exoskeleton_control" type="dummy_crutches.py" output="screen" launch-prefix="xterm -e"/>
+
+</launch>

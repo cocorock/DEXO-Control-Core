@@ -1,0 +1,62 @@
+
+New architecture ROS
+This is the proposal for a ROS1 architecture for a lower limb exoskeleton.
+
+1.	Gait Planner Node: It receives a plane from the topic floor_ref, and from this plane it calculates the point target for each foot, then it sends through gait_params the targets for each foot, the calculation is performed at the end of each gait cycle, right or left, noticing that the left  gait cycle is a phase offset 50% from the right gait cycle. The node should run at 10-20hz.
+*I need to define it, but I don’t want to run it initially. I need to test the motor control first, and I want to simplify the possible debugging I would need. 
+a.	Subscribes: floor_ref (not implemented yet), e_stop_trigger
+b.	Publishes: gait_params
+c.	Services: inverse_kinematics_closedchain
+2.	Trajectory Generator Node: It calculates the trajectory for each ankle using a GMR from a previously fitted GMM. I need to initiate the GMM model because each leg is modeled as a 2-link planar arm separately. It uses the data from the topic ExoskeletonStatus to calculate the trajectory of the ankles. Still, first, it has to call the service Forward_kinematics_leg to convert the exoskeleton joints’ state into Cartesian coordinates to feed the GMR function. After calculating the ankle's trajectory in Cartesian coordinates, the node needs to convert this trajectory into angular position and velocity, through the inverse_kinematics_leg service (one for each leg). After calculating the joints' trajectory, it is published in the topic joints_trajectory. The node needs to run at 15-20Hz, to update the trajectory at a rate fast enough for the motor control node to process it.
+*But first, I want to perform the test of communication and motor control, so I want to load the trajectory from a JSON file instead.
+a.	Subscribes: gait_params, e_stop_trigger
+b.	Publishes: joints_trajectory
+c.	Services: inverse_kinematics_leg, Forward_kinematics_leg
+1.	Motor Control Node: it oversees sending the control commands (impedance control values) via CAN to the 4 motors, processing the motors' responses, and publishing the topic ExoskeletonState. The feedforward torque must be calculated before sending the command for each motor. The feedforward torque is calculated twice, once for each leg,  using the FeedFoward_Torque function, which takes as arguments the current position, velocity, and torque of the motors. 
+FeedFoward_Torque fucntion:
+i.	Args: q, qdot, tau
+ii.	Return: torque
+
+The same values need to be published in the topic ExoskeletoStatus. On the other hand, the position and velocity reference values for the impedance command come from the topic joints trajectory. The data is sent via CAN at 1 Mbps. I would like to send the commands for all four motors before receiving their responses, so they behave synchronously. When the calibration is received via the topic Calibration_trigger, it performs the calibration described in the files MIT_motor_controller_v2.py and exoskeleton_control_node.py. The node must not start the trajectory tracking and control of the all motors until calibration is complete, the calibration routinte . This node should run at 100hz, sending the 4 CAN frames should take 444 microseconds, and receiving 4 frames should also take 444 microseconds. This is about 1milisecond. For safety measures, the motors could delay in their response, I would like to reserve 2 milliseconds, it lefts 8ms for calculations.
+*The driver program for the motors and the initial node implementation are in the files MIT_motor_controller_v2.py and exoskeleton_control_node.py. Please check if they satisfy the project's requirements and make changes accordingly.
+d.	Subscribes: joints_trajectory , e_stop_trigger, calibration_trigger
+e.	Publishes: ExoskeletonState, MotorStatus, Torques
+f.	Services: -
+3.	Emergency Stop: this node oversees the immediate stop of the motors, it decides to send an emergency stop trigger based on the error_flags of any of the motors, the trigger from the topic stop_trigger, or the Torso_pose values (not implemented yet).  I need to implement a state machine using SMACH to control the execution of the code, with the states: Init, Calibrating, Ready, Stopped, Error.
+a.	Subscribes: MotorStatus, Torso_pose (not implemented yet)
+b.	Publishes: e_stop_trigger
+c.	Services: -
+4.	Dummy_crutches: stop_trigger and calibration_trigger must be implemented manually through the cli. In the future, a node called crutches will be responsible for publishing the topic. I want the instructions on sending the trigger signal using the CLI. 
+a.	Subscribes: -
+b.	Publishes: stop_trigger, calibration_trigger
+c.	Services: -
+
+
+Topics
+1.	e_stop_trigger: 1 boolean (trigger flag) and the current machine state.
+2.	stop_trigger: 1 boolean (trigger flag)
+3.	Calibration_trigger: 1 boolean flag
+4.	gait_params:  R_taget (x , y), and R_taget (x , y)  
+5.	joints_trajectory: [Rhip_pos_ref, Rknee_pos_ref, Rhip_vel_ref, Rknee_vel_ref] and
+[Lhip_pos_ref,  Lknee_pos_ref,  Lhip_vel_ref,  Lknee_vel_ref]
+6.	ExoskeletonState:  [Rhip_pos_st, Rknee_pos_st, Rhip_vel_st, Rknee_vel_st, Rhip_tau_st,	 Rknee_tau_st] and	[Lhip_pos_st,  Lknee_pos_st,  Lhip_vel_st,  Lknee_vel_st, Lhip_tau__st, Lknee_tau_st]
+
+7.	MotorStatus: Motors 1 through 4, each one has the fields: joint_name, motor_id, calibrated_flag, position, velocity, torque, temperature, error_flags
+
+8.	Torques: FeedForward_Torque’s output for each motor (4).
+
+*All the topics should have a time stamp to make debugging easier.
+
+Service
+2.	inverse_kinematics_closedchain: 
+a.	Args: leading_ankle_X_pos, leading_ankle_Y_pos, Hip_range, Knee_range, Torso_range.
+b.	Returns: error_flag, theta_Rhip, theta_Lhip, theta_Rknee, theta_Lknee, thera_torso
+3.	inverse_kinematics_leg: 
+a.	args: ankle_X_pos, ankle_Y_pos 
+b.	returns: theta1, theta2
+4.	Forward_kinematics_leg:
+a.	Args: theta_hip, theta_knee
+b.	Returns: positions x,y
+
+*pending topic:
+Torso_pose: roll, pitch and yaw
