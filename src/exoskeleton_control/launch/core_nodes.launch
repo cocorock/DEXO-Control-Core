@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 
+    Launch file for the core exoskeleton control nodes.
+    This includes:
+    - Motor Control
+    - Emergency Stop
+    - Trajectory Generator
+    - Dummy Crutches (for manual input)
+  -->
+
+  <!-- Load configurations for each node -->
+  <rosparam file="$(find exoskeleton_control)/config/motor_control_config.yaml" command="load" ns="motor_control_node"/>
+  <rosparam file="$(find exoskeleton_control)/config/emergency_stop_config.yaml" command="load" ns="emergency_stop_node"/>
+  <rosparam file="$(find exoskeleton_control)/config/trajectory_generator_config.yaml" command="load" ns="trajectory_generator_node"/>
+
+  <!-- Motor Control Node -->
+  <node name="motor_control_node" pkg="exoskeleton_control" type="motor_control_node.py" output="screen">
+    <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
+    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="Torques" to="/exoskeleton/torques"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
+  </node>
+
+  <!-- Emergency Stop Node -->
+  <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
+    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
+    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+  </node>
+
+  <!-- Trajectory Generator Node -->
+  <node name="trajectory_generator_node" pkg="exoskeleton_control" type="trajectory_generator_node.py" output="screen">
+    <param name="trajectory_file" value="$(find exoskeleton_control)/data/new_processed_gait_data#39_1_json_structure_1.json"/>
+    <remap from="gait_params" to="/exoskeleton/gait_params"/>
+    <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+  </node>
+
+  <!-- Dummy Crutches Node for manual input -->
+  <node name="dummy_crutches_node" pkg="exoskeleton_control" type="dummy_crutches_node.py" output="screen" launch-prefix="xterm -e">
+    <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
+    <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
+  </node>
+
+</launch>
