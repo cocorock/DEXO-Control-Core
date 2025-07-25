@@ -1,0 +1,102 @@
+# Emergency Stop Node Configuration
+# Configuration for safety monitoring and emergency stop system
+
+# Monitoring Parameters
+monitor_frequency: 10.0        # Hz - How often to check system health
+communication_timeout: 2.0     # seconds - Max time without motor status updates
+
+# Safety Thresholds
+safety:
+  max_motor_temperature: 80.0   # Celsius - Maximum allowed motor temperature
+  max_torque_error: 50.0        # Nm - Maximum allowed torque deviation
+  max_position_error: 1.57      # rad (90 degrees) - Maximum position error
+  max_velocity_error: 10.0      # rad/s - Maximum velocity error
+  
+  # Critical error flags that trigger immediate emergency stop
+  # These are bit flags from motor error status
+  critical_error_flags: [1, 2, 4, 8]  # [overcurrent, overvoltage, encoder_error, overtemp]
+
+# State Machine Parameters
+state_machine:
+  auto_recovery: false          # Enable automatic recovery from error state
+  error_recovery_delay: 5.0     # seconds - Delay before attempting auto recovery
+  enable_introspection: true    # Enable SMACH introspection server for debugging
+  max_calibration_time: 120.0   # seconds - Maximum time allowed for calibration
+
+# Emergency Stop Behavior
+emergency:
+  auto_stop_on_error: true           # Automatically trigger e-stop on motor errors
+  stop_on_communication_loss: true   # Trigger e-stop on communication timeout
+  stop_on_temperature: true          # Trigger e-stop on overtemperature
+  stop_on_torque_limit: true         # Trigger e-stop on excessive torque
+  stop_on_position_error: true       # Trigger e-stop on large position errors
+
+# Motor Safety Monitoring
+motor_monitoring:
+  enable_individual_monitoring: true  # Monitor each motor individually
+  temperature_warning_threshold: 70.0 # Celsius - Warning threshold
+  torque_warning_threshold: 40.0      # Nm - Warning threshold
+  position_tolerance: 0.1             # rad - Allowed position tolerance
+  velocity_tolerance: 1.0             # rad/s - Allowed velocity tolerance
+
+# System State Timeouts
+timeouts:
+  init_to_calibration: 10.0      # seconds - Max time in init before starting calibration
+  calibration_timeout: 120.0     # seconds - Max time for complete calibration
+  ready_to_stop_delay: 0.5       # seconds - Delay when transitioning to stop
+  stop_to_ready_delay: 2.0       # seconds - Minimum time in stop before ready
+  error_recovery_timeout: 30.0   # seconds - Max time for error recovery
+
+# Logging and Debug
+logging:
+  level: "INFO"                       # DEBUG, INFO, WARN, ERROR
+  log_state_transitions: true         # Log all state machine transitions
+  log_safety_violations: true        # Log all safety threshold violations
+  log_motor_warnings: true           # Log motor warning conditions
+  emergency_log_level: "ERROR"       # Log level for emergency conditions
+
+# Hardware Integration
+hardware:
+  enable_hardware_estop: false       # Enable physical emergency stop button
+  hardware_estop_pin: 18             # GPIO pin for hardware e-stop (if enabled)
+  estop_button_pullup: true          # Use internal pullup for e-stop button
+  
+# Torso Pose Monitoring (future implementation)
+torso_monitoring:
+  enabled: false                     # Enable torso pose safety monitoring
+  max_roll_angle: 30.0              # degrees - Maximum allowed roll
+  max_pitch_angle: 30.0             # degrees - Maximum allowed pitch
+  max_angular_velocity: 90.0        # deg/s - Maximum allowed angular velocity
+
+# Recovery Procedures
+recovery:
+  enable_automatic_recovery: false   # Enable automatic recovery attempts
+  max_recovery_attempts: 3          # Maximum number of auto-recovery attempts
+  recovery_attempt_delay: 10.0      # seconds - Delay between recovery attempts
+  require_manual_confirmation: true  # Require manual confirmation before recovery
+
+# Integration with Other Nodes
+node_integration:
+  motor_control_node: true          # Monitor motor control node status
+  trajectory_generator_node: true   # Monitor trajectory generator status
+  gait_planner_node: false         # Monitor gait planner (when implemented)
+  
+# Message Publishing
+publishing:
+  estop_publish_rate: 20.0          # Hz - Rate to publish e-stop status
+  status_publish_rate: 5.0          # Hz - Rate to publish system status
+  queue_size: 10                    # Queue size for published messages
+
+# Advanced Safety Features
+advanced_safety:
+  enable_predictive_monitoring: false # Enable predictive fault detection
+  trend_analysis_window: 10.0         # seconds - Window for trend analysis
+  prediction_threshold: 0.8           # Confidence threshold for predictions
+  enable_safe_shutdown_sequence: true # Enable controlled shutdown on e-stop
+  
+# Testing and Simulation
+testing:
+  simulation_mode: false            # Enable simulation mode for testing
+  inject_test_errors: false        # Inject test errors for validation
+  test_error_interval: 30.0        # seconds - Interval for test error injection
+  bypass_hardware_checks: false    # Bypass hardware-specific checks

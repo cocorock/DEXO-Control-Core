@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Trajectory Generator Node Launch File -->
+  
+  <!-- Load trajectory generator configuration parameters -->
+  <rosparam file="$(find exoskeleton_control)/config/trajectory_generator_config.yaml" command="load" ns="trajectory_generator_node"/>
+  
+  <!-- Trajectory Generator Node -->
+  <node name="trajectory_generator_node" pkg="exoskeleton_control" type="trajectory_generator_node.py" output="screen">
+    
+    <!-- Override specific parameters if needed -->
+    <param name="control_frequency" value="15"/>
+    <param name="trajectory_file" value="$(find exoskeleton_control)/data/new_processed_gait_data#39_1_json_structure_1.json"/>
+    
+    <!-- Remap topics if needed -->
+    <remap from="gait_params" to="/exoskeleton/gait_params"/>
+    <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    
+  </node>
+  
+</launch>

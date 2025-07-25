@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Complete Exoskeleton Control System Launch File -->
+  
+  <!-- Launch Arguments -->
+  <arg name="start_motor_control" default="true" doc="Start motor control node"/>
+  <arg name="start_emergency_stop" default="true" doc="Start emergency stop node"/>
+  <arg name="start_trajectory_generator" default="true" doc="Start trajectory generator node"/>
+  <arg name="start_dummy_crutches" default="true" doc="Start dummy crutches for manual testing"/>
+  <arg name="start_smach_viewer" default="false" doc="Start SMACH viewer for state machine visualization"/>
+  <arg name="use_simulation" default="false" doc="Run in simulation mode (no real hardware)"/>
+  
+  <!-- System Parameters -->
+  <group ns="exoskeleton">
+    
+    <!-- Motor Control Node -->
+    <group if="$(arg start_motor_control)">
+      <include file="$(find exoskeleton_control)/launch/motor_control.launch">
+        <arg name="simulation_mode" value="$(arg use_simulation)"/>
+      </include>
+    </group>
+    
+    <!-- Emergency Stop Node -->
+    <group if="$(arg start_emergency_stop)">
+      <include file="$(find exoskeleton_control)/launch/emergency_stop.launch">
+        <arg name="start_smach_viewer" value="$(arg start_smach_viewer)"/>
+      </include>
+    </group>
+    
+    <!-- Trajectory Generator Node -->
+    <group if="$(arg start_trajectory_generator)">
+      <include file="$(find exoskeleton_control)/launch/trajectory_generator.launch"/>
+    </group>
+    
+    <!-- Dummy Crutches Node (for testing) -->
+    <group if="$(arg start_dummy_crutches)">
+      <include file="$(find exoskeleton_control)/launch/dummy_crutches.launch">
+        <arg name="show_instructions" value="true"/>
+      </include>
+    </group>
+    
+  </group>
+  
+  <!-- Optional: RQT for monitoring -->
+  <node name="rqt_exoskeleton" pkg="rqt_gui" type="rqt_gui" 
+        args="--perspective-file $(find exoskeleton_control)/config/exoskeleton_monitor.perspective"
+        if="$(eval arg('start_rqt') if arg('start_rqt') else false)"/>
+  
+  <!-- Optional: RViz for visualization -->
+  <node name="rviz_exoskeleton" pkg="rviz" type="rviz"
+        args="-d $(find exoskeleton_control)/config/exoskeleton.rviz"
+        if="$(eval arg('start_rviz') if arg('start_rviz') else false)"/>
+  
+  <!-- Additional launch arguments -->
+  <arg name="start_rqt" default="false" doc="Start RQT monitoring interface"/>
+  <arg name="start_rviz" default="false" doc="Start RViz visualization"/>
+  
+  <!-- System Health Monitor (future implementation) -->
+  <!-- <include file="$(find exoskeleton_control)/launch/system_monitor.launch" if="$(arg enable_system_monitor)"/> -->
+  
+  <!-- Logging Configuration -->
+  <node name="rosbag_record" pkg="rosbag" type="record"
+        args="-o /tmp/exoskeleton_log --split --duration=10m 
+              /exoskeleton/state 
+              /exoskeleton/motor_status 
+              /exoskeleton/joints_trajectory 
+              /exoskeleton/emergency_stop 
+              /exoskeleton/torques"
+        if="$(eval arg('record_bag') if arg('record_bag') else false)"/>
+  
+  <arg name="record_bag" default="false" doc="Record system data to rosbag"/>
+  <arg name="enable_system_monitor" default="false" doc="Enable system health monitoring"/>
+  
+  <!-- Startup Information -->
+  <node name="system_info" pkg="exoskeleton_control" type="echo" args="
+    =============================================
+    EXOSKELETON CONTROL SYSTEM STARTUP
+    =============================================
+    
+    Active Nodes:
+    $(if arg('start_motor_control'); then echo '✓ Motor Control Node'; else echo '✗ Motor Control Node (disabled)'; fi)
+    $(if arg('start_emergency_stop'); then echo '✓ Emergency Stop Node'; else echo '✗ Emergency Stop Node (disabled)'; fi)
+    $(if arg('start_trajectory_generator'); then echo '✓ Trajectory Generator Node'; else echo '✗ Trajectory Generator Node (disabled)'; fi)
+    $(if arg('start_dummy_crutches'); then echo '✓ Dummy Crutches Node'; else echo '✗ Dummy Crutches Node (disabled)'; fi)
+    
+    System Mode: $(if arg('use_simulation'); then echo 'SIMULATION'; else echo 'HARDWARE'; fi)
+    
+    Quick Start Commands:
+    1. Start calibration: Use dummy crutches CLI ('c' command)
+    2. Emergency stop:    Use dummy crutches CLI ('s' command)
+    3. Resume operation:  Use dummy crutches CLI ('r' command)
+    
+    Monitoring Topics:
+    - System State:       rostopic echo /exoskeleton/state
+    - Motor Status:       rostopic echo /exoskeleton/motor_status
+    - Joint Trajectory:   rostopic echo /exoskeleton/joints_trajectory
+    - Emergency Status:   rostopic echo /exoskeleton/emergency_stop
+    
+    =============================================
+  " output="screen"/>
+  
+</launch>

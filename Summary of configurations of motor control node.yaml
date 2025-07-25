@@ -1,0 +1,56 @@
+Summary of Configuration System:
+1. Configuration File Structure:
+
+motor_control_config.yaml: Complete configuration with all your specified values
+Organized sections: Calibration, gains, motor hardware, safety parameters
+Comments: Detailed explanations for each parameter
+
+2. Key Configuration Values (as requested):
+yamlcalibration_sequence: [1, 3, 2, 4]  # Right Hip → Left Hip → Right Knee → Left Knee
+torque_threshold: 8.0                # Nm
+calibration_speed_deg: 30.0          # degrees/second  
+max_calibration_time: 30.0           # seconds
+
+motor_ids: [0x06, 0x07, 0x08, 0x09]  # Your specified CAN IDs
+
+angle_limits_deg:
+  - [-30, 90]   # Right hip
+  - [-100, 0]   # Right knee  
+  - [-30, 90]   # Left hip
+  - [-100, 0]   # Left knee
+
+motor_directions: [1, 1, 1, 1]       # All normal direction
+
+gains:
+  calibration: {kp: 10.0, kd: 1.0}   # Low gains for safety
+  hold: {kp: 5.0, kd: 1.0}           # Light position hold
+  trajectory: {kp: 50.0, kd: 2.0}    # Active trajectory control
+3. Usage Instructions:
+bash# Method 1: Using launch file (recommended)
+roslaunch exoskeleton_control motor_control.launch
+
+# Method 2: Manual parameter loading
+rosparam load motor_control_config.yaml /motor_control_node/
+rosrun exoskeleton_control motor_control_node.py
+
+# Method 3: Test configuration loading
+rosparam load motor_control_config.yaml /test_motor_config/
+rosrun exoskeleton_control test_motor_config.py
+4. Benefits of This Approach:
+
+Easy tuning: Modify gains without recompiling
+Safe defaults: Fallback values if config file is missing
+Validation: Clear error messages if parameters are wrong
+Flexibility: Can override specific parameters in launch files
+Documentation: Self-documenting YAML with comments
+
+5. File Locations:
+exoskeleton_control/
+├── config/
+│   └── motor_control_config.yaml
+├── launch/
+│   └── motor_control.launch
+├── scripts/
+│   ├── motor_control_node.py
+│   └── test_motor_config.py
+The motor control node now loads all configuration from the YAML file, with proper error handling and fallback to default values. The motor directions are properly applied to velocity and torque commands, and all gains are configurable per operation mode.

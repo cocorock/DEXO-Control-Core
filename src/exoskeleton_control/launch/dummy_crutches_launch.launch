@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Dummy Crutches Node Launch File -->
+  
+  <!-- Dummy Crutches Node for Manual Testing -->
+  <node name="dummy_crutches_node" pkg="exoskeleton_control" type="dummy_crutches_node.py" output="screen">
+    
+    <!-- Remap topics to match system architecture -->
+    <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
+    <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
+    
+  </node>
+  
+  <!-- Instructions for users -->
+  <node name="crutches_instructions" pkg="exoskeleton_control" type="echo" args="
+    ============================================
+    DUMMY CRUTCHES NODE INSTRUCTIONS
+    ============================================
+    
+    Available CLI Commands:
+    - 'c' or 'calibrate': Start motor calibration
+    - 's' or 'stop':       Emergency stop
+    - 'r' or 'resume':     Resume operation  
+    - 'h' or 'help':       Show help
+    - 'q' or 'quit':       Exit
+    
+    Alternative ROS Commands:
+    - Calibration: rostopic pub /exoskeleton/calibration exoskeleton_control/CalibrationTrigger '{header: {stamp: now}, trigger: true}'
+    - Stop:        rostopic pub /exoskeleton/stop_trigger exoskeleton_control/StopTrigger '{header: {stamp: now}, trigger: true}'
+    - Resume:      rostopic pub /exoskeleton/stop_trigger exoskeleton_control/StopTrigger '{header: {stamp: now}, trigger: false}'
+    
+    ============================================
+  " if="$(arg show_instructions)"/>
+  
+  <!-- Launch file arguments -->
+  <arg name="show_instructions" default="true" doc="Show usage instructions on startup"/>
+  
+</launch>

@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Gait Planner Node Launch File -->
+  
+  <!-- Load gait planner configuration parameters -->
+  <rosparam file="$(find exoskeleton_control)/config/gait_planner_config.yaml" command="load" ns="gait_planner_node"/>
+  
+  <!-- Gait Planner Node -->
+  <node name="gait_planner_node" pkg="exoskeleton_control" type="gait_planner_node.py" output="screen">
+    
+    <!-- Override specific parameters if needed -->
+    <param name="control_frequency" value="15.0"/>
+    <param name="testing/auto_start_gait" value="false"/>  <!-- Don't auto-start for initial testing -->
+    
+    <!-- Closed-chain IK equation parameters -->
+    <param name="closed_chain/coupling_distance" value="0.1"/>  <!-- 'd' parameter -->
+    <param name="closed_chain/constraint_tolerance" value="0.001"/>
+    
+    <!-- Remap topics to match system architecture -->
+    <remap from="floor_ref" to="/exoskeleton/floor_reference"/>
+    <remap from="gait_params" to="/exoskeleton/gait_params"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    
+  </node>
+  
+  <!-- Optional: Gait visualization node (future implementation) -->
+  <!-- <node name="gait_visualizer" pkg="exoskeleton_control" type="gait_visualizer.py" output="screen" if="$(arg enable_visualization)"/> -->
+  
+  <!-- Launch file arguments -->
+  <arg name="enable_visualization" default="false" doc="Enable gait pattern visualization"/>
+  <arg name="auto_start" default="false" doc="Automatically start gait planning"/>
+  
+</launch>

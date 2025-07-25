@@ -1,0 +1,69 @@
+# Trajectory Generator Node Configuration
+# Configuration for loading and processing gait trajectory data
+
+# Control Parameters
+control_frequency: 15  # Hz - Trajectory publishing rate (15-20Hz)
+
+# Leg Physical Parameters (2-link planar arm model)
+leg_parameters:
+  L1: 0.44  # Thigh length (m) - first link
+  L2: 0.44  # Shin length (m) - second link
+
+# Joint Limits (degrees) - converted to radians internally
+joint_limits:
+  hip_min_deg: -30    # Hip joint minimum angle
+  hip_max_deg: 90     # Hip joint maximum angle  
+  knee_min_deg: -100  # Knee joint minimum angle
+  knee_max_deg: 0     # Knee joint maximum angle
+
+# Trajectory File Configuration
+trajectory_file: "new_processed_gait_data#39_1_json_structure_1.json"  # JSON file path
+package_path: "$(find exoskeleton_control)/data"  # Package relative path
+
+# Trajectory Processing Parameters
+loop_trajectory: true      # Whether to loop the trajectory continuously
+trajectory_scale: 1.0      # Scale factor for trajectory positions (1.0 = no scaling)
+
+# JSON Data Extraction Settings
+json_extraction:
+  use_demonstration_index: 0  # Which demonstration to use (0 = first)
+  right_leg_fields:
+    position: "ankle_pos_FR1"          # Field name for right ankle positions
+    velocity: "ankle_pos_FR1_velocity" # Field name for right ankle velocities
+  left_leg_fields:
+    position: "ankle_pos_FR2"          # Field name for left ankle positions  
+    velocity: "ankle_pos_FR2_velocity" # Field name for left ankle velocities
+
+# Inverse Kinematics Parameters
+ik_settings:
+  max_iterations: 100        # Maximum IK solver iterations
+  tolerance: 1e-6           # Convergence tolerance
+  elbow_down_config: true   # Use elbow-down configuration for legs
+
+# Velocity Calculation Settings
+velocity_calculation:
+  use_jacobian: true        # Use Jacobian method for joint velocities
+  finite_difference: false  # Use finite difference as fallback
+  smoothing_window: 3       # Smoothing window for velocity calculation
+
+# Safety Parameters
+safety:
+  max_joint_velocity: 5.0   # rad/s - Maximum allowed joint velocity
+  max_ankle_velocity: 2.0   # m/s - Maximum allowed ankle velocity
+  position_tolerance: 0.1   # m - Position tolerance for reachability check
+
+# Logging and Debug
+logging:
+  level: "INFO"                    # DEBUG, INFO, WARN, ERROR
+  log_trajectory_stats: true       # Log trajectory statistics on load
+  log_ik_failures: true           # Log inverse kinematics failures
+  log_joint_limits: true          # Log joint limit violations
+  trajectory_progress_interval: 50 # Log progress every N trajectory points
+
+# Future GMR/GMM Parameters (for when GMR implementation is added)
+gmr_settings:
+  enabled: false              # Enable GMR-based trajectory generation
+  model_file: ""              # Path to trained GMM model
+  input_dimensions: 2         # Input dimensions for GMR
+  output_dimensions: 4        # Output dimensions (joint positions/velocities)
+  smoothing_factor: 0.1       # Smoothing factor for GMR output

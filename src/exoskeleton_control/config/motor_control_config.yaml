@@ -1,0 +1,94 @@
+# Motor Control Node Configuration
+# This file contains all configurable parameters for the exoskeleton motor control system
+
+# Calibration Parameters
+calibration_sequence: [1, 3, 2, 4]  # Order: Right Hip → Left Hip → Right Knee → Left Knee
+torque_threshold: 8.0                # Nm - Torque threshold for stopper detection
+calibration_speed_deg: 30.0          # degrees/second - Speed during calibration
+max_calibration_time: 30.0           # seconds - Maximum time per joint calibration
+
+# Control Gains
+gains:
+  calibration:
+    kp: 10.0  # Position gain during calibration (low for safety)
+    kd: 1.0   # Velocity gain during calibration (low for safety)
+  
+  hold:
+    kp: 5.0   # Position gain for holding position when no trajectory
+    kd: 1.0   # Velocity gain for holding position
+  
+  trajectory:
+    kp: 50.0  # Position gain during trajectory following
+    kd: 2.0   # Velocity gain during trajectory following
+
+# Motor Hardware Configuration
+motor_ids: [0x06, 0x07, 0x08, 0x09]  # CAN IDs for motors
+
+joint_names: 
+  - "right_hip"
+  - "right_knee" 
+  - "left_hip"
+  - "left_knee"
+
+motor_models:
+  - "AK80_64"  # Right hip - high torque
+  - "AK80_8"   # Right knee - standard torque
+  - "AK80_64"  # Left hip - high torque
+  - "AK80_8"   # Left knee - standard torque
+
+# Joint Angle Limits (degrees)
+# Format: [min_angle, max_angle]
+angle_limits_deg:
+  - [-30, 90]   # Right hip limits
+  - [-100, 0]   # Right knee limits  
+  - [-30, 90]   # Left hip limits
+  - [-100, 0]   # Left knee limits
+
+# Motor Direction Multipliers
+# 1 = normal direction, -1 = reversed direction
+motor_directions: [1, 1, 1, 1]
+
+# Advanced Parameters (optional)
+control_frequency: 100.0  # Hz - Main control loop frequency
+
+# CAN Interface Configuration
+can_interface:
+  bitrate: 1000000  # 1 Mbps
+  device_index: 0   # First available CAN device
+
+# Safety Parameters
+emergency_stop:
+  max_torque_error: 50.0    # Nm - Maximum allowed torque error
+  max_position_error: 0.5   # rad - Maximum allowed position error
+  timeout_ms: 100           # milliseconds - Communication timeout
+
+# Feedforward Torque Calculator Parameters
+feedforward:
+  # Physical parameters for 2-link arm model
+  right_leg:
+    m1: 8.0      # Link 1 mass [kg] 
+    m2: 3.7      # Link 2 mass [kg]
+    l1: 0.44     # Link 1 length [m]
+    lc1: 0.2     # Link 1 center of mass [m]
+    lc2: 0.2     # Link 2 center of mass [m] 
+    I1: 0.13     # Link 1 inertia [kg⋅m²]
+    I2: 0.05     # Link 2 inertia [kg⋅m²]
+  
+  left_leg:
+    m1: 8.0      # Link 1 mass [kg]
+    m2: 3.7      # Link 2 mass [kg] 
+    l1: 0.44     # Link 1 length [m]
+    lc1: 0.2     # Link 1 center of mass [m]
+    lc2: 0.2     # Link 2 center of mass [m]
+    I1: 0.13     # Link 1 inertia [kg⋅m²]
+    I2: 0.05     # Link 2 inertia [kg⋅m²]
+  
+  # Acceleration estimation
+  alpha: 0.1     # Low-pass filter coefficient (0-1)
+
+# Logging and Debug
+logging:
+  level: "INFO"  # DEBUG, INFO, WARN, ERROR
+  publish_debug_topics: false
+  log_motor_status: true
+  log_calibration_details: true

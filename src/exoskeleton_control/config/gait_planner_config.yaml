@@ -1,0 +1,96 @@
+# Gait Planner Node Configuration
+# Configuration for high-level gait planning and closed-chain inverse kinematics
+
+# Control Parameters
+control_frequency: 15.0  # Hz - Gait planning update rate (10-20Hz)
+
+# Gait Parameters
+gait:
+  step_length: 0.3      # meters - Forward step length
+  step_height: 0.05     # meters - Maximum foot clearance during swing
+  step_width: 0.2       # meters - Lateral distance between feet
+  frequency: 0.5        # Hz - Gait frequency (steps per second)
+  
+  # Gait timing (as fractions of gait cycle)
+  stance_duration: 0.6  # Fraction of cycle in stance phase (0.6 = 60%)
+  swing_duration: 0.4   # Fraction of cycle in swing phase (0.4 = 40%)
+  
+  # Phase relationships
+  left_phase_offset: 0.5  # Left leg phase offset (0.5 = 50% out of phase)
+
+# Closed-Chain Inverse Kinematics Parameters
+# Based on equation: x_target = 2*X_max + X_min + (d*sin(theta_torso))
+closed_chain:
+  coupling_distance: 0.1      # meters - 'd' parameter in the equation
+  hip_separation: 0.3         # meters - Distance between hip joints
+  constraint_tolerance: 0.001 # meters - Tolerance for constraint validation
+  
+  # Constraint equation parameters
+  equation_coefficients:
+    x_max_multiplier: 2.0     # Coefficient for X_max term (2 in your equation)
+    x_min_multiplier: 1.0     # Coefficient for X_min term (1 in your equation)
+    enable_torso_coupling: true # Enable d*sin(theta_torso) term
+
+# Joint Limits and Ranges (converted to radians internally)
+joint_ranges:
+  hip_range: 60      # degrees - Total hip joint range (±30°)
+  knee_range: 90     # degrees - Total knee joint range  
+  torso_range: 30    # degrees - Total torso orientation range (±15°)
+
+# Physical Parameters
+physical:
+  thigh_length: 0.44    # meters - L1 (first link length)
+  shin_length: 0.44     # meters - L2 (second link length)
+  foot_length: 0.25     # meters - Foot length for clearance calculations
+
+# Safety Parameters
+safety:
+  max_step_deviation: 0.1       # meters - Maximum allowed step deviation
+  min_ground_clearance: 0.02    # meters - Minimum foot clearance
+  max_joint_velocity: 2.0       # rad/s - Maximum joint velocity
+  constraint_violation_limit: 3 # Number of violations before emergency stop
+
+# Gait Planning Advanced Parameters
+planning:
+  horizon: 3                  # Number of steps to plan ahead
+  adaptive_timing: true       # Enable adaptive gait timing
+  terrain_adaptation: true    # Enable terrain-adaptive planning
+  predictive_stepping: false  # Enable predictive foot placement
+  
+  # Trajectory smoothing
+  position_smoothing: 0.1     # Position trajectory smoothing factor
+  velocity_smoothing: 0.2     # Velocity trajectory smoothing factor
+
+# Floor Reference Parameters
+floor_reference:
+  default_normal: [0.0, 1.0, 0.0]  # Default floor normal (Y-up)
+  default_point: [0.0, 0.0, 0.0]   # Default floor reference point
+  slope_tolerance: 15.0             # degrees - Maximum acceptable floor slope
+  update_rate: 5.0                  # Hz - Floor reference update rate
+
+# Torso Orientation Control
+torso_control:
+  enable_torso_stabilization: true  # Enable active torso orientation control
+  torso_damping: 0.5                # Torso orientation damping factor
+  max_torso_rate: 30.0              # deg/s - Maximum torso rotation rate
+  
+# Integration with Other Nodes
+integration:
+  use_floor_reference: false        # Enable floor reference input (when implemented)
+  use_torso_feedback: false         # Enable torso pose feedback (when implemented)
+  publish_debug_info: true          # Publish detailed debug information
+
+# Logging and Debug
+logging:
+  level: "INFO"                     # DEBUG, INFO, WARN, ERROR
+  log_constraint_calculations: true # Log closed-chain constraint details
+  log_gait_phases: false           # Log gait phase transitions
+  log_ik_solutions: false          # Log inverse kinematics solutions
+  constraint_violation_log: true   # Log constraint violations
+
+# Testing and Simulation
+testing:
+  auto_start_gait: true            # Automatically start gait on node startup
+  simulation_mode: false           # Enable simulation mode
+  fixed_torso_angle: 0.0          # degrees - Fixed torso angle for testing
+  override_floor_reference: false  # Use fixed floor reference for testing

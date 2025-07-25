@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Emergency Stop Node Launch File -->
+  
+  <!-- Load emergency stop configuration parameters -->
+  <rosparam file="$(find exoskeleton_control)/config/emergency_stop_config.yaml" command="load" ns="emergency_stop_node"/>
+  
+  <!-- Emergency Stop Node -->
+  <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
+    
+    <!-- Override specific parameters if needed -->
+    <param name="monitor_frequency" value="10.0"/>
+    <param name="safety/auto_stop_on_error" value="true"/>
+    
+    <!-- Remap topics to match system architecture -->
+    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
+    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    
+  </node>
+  
+  <!-- Optional: Start SMACH Viewer for state machine visualization -->
+  <node name="smach_viewer" pkg="smach_viewer" type="smach_viewer.py" output="screen" 
+        if="$(eval arg('start_smach_viewer') if arg('start_smach_viewer') else false)" />
+  
+  <!-- Arguments for launch file -->
+  <arg name="start_smach_viewer" default="false" doc="Start SMACH viewer for debugging"/>
+  
+</launch>
