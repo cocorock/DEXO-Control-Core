@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Test script for Emergency Stop Node functionality
 Tests various emergency conditions and state transitions
