@@ -6,8 +6,8 @@ control_frequency: 15  # Hz - Trajectory publishing rate (15-20Hz)
 
 # Leg Physical Parameters (2-link planar arm model)
 leg_parameters:
-  L1: 0.44  # Thigh length (m) - first link
-  L2: 0.44  # Shin length (m) - second link
+  L1: 0.39  # Thigh length (m) - first link
+  L2: 0.42  # Shin length (m) - second link
 
 # Joint Limits (degrees) - converted to radians internally
 joint_limits:
