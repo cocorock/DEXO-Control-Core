@@ -20,13 +20,6 @@ add_message_files(
   Torques.msg
 )
 
-add_service_files(
-  FILES
-  InverseKinematicsClosedChain.srv
-  InverseKinematicsLeg.srv
-  ForwardKinematicsLeg.srv
-)
-
 generate_messages(
   DEPENDENCIES
   std_msgs

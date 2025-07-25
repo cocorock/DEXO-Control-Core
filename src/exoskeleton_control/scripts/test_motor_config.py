@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Test script to verify motor control configuration loading
 Run this to test parameter loading without starting the full motor control system
