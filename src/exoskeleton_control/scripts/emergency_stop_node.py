@@ -33,6 +33,7 @@ class EmergencyStopNode:
         self.motor_data = {}
         self.last_motor_update = rospy.Time.now()
         self.manual_stop_received = False
+        self.manual_calibration_trigger = False
         self.calibration_complete = False
         
         # Thread safety
@@ -41,7 +42,7 @@ class EmergencyStopNode:
         # Subscribers
         rospy.Subscriber('MotorStatus', MotorStatus, self.motor_status_callback)
         rospy.Subscriber('stop_trigger', StopTrigger, self.stop_trigger_callback)
-        rospy.Subscriber('ExoskeletonState', ExoskeletonState, self.exoskeleton_state_callback)
+        rospy.Subscriber('calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
@@ -174,18 +175,15 @@ class EmergencyStopNode:
         current_time = rospy.Time.now()
         
         with self.state_lock:
-            # Update motor data
-            for i, motor_id in enumerate(getattr(msg, 'motor_ids', range(len(getattr(msg, 'positions', []))))):
-                if hasattr(msg, 'positions') and i < len(msg.positions):
-                    self.motor_data[motor_id] = {
-                        'position': msg.positions[i] if i < len(msg.positions) else 0.0,
-                        'velocity': msg.velocities[i] if hasattr(msg, 'velocities') and i < len(msg.velocities) else 0.0,
-                        'torque': msg.torques[i] if hasattr(msg, 'torques') and i < len(msg.torques) else 0.0,
-                        'temperature': msg.temperatures[i] if hasattr(msg, 'temperatures') and i < len(msg.temperatures) else 0.0,
-                        'error_flags': msg.errors[i] if hasattr(msg, 'errors') and i < len(msg.errors) else 0,
-                        'last_update': current_time
-                    }
-            
+            self.motor_data[msg.motor_id] = {
+                'position': msg.position,
+                'velocity': msg.velocity,
+                'torque': msg.torque,
+                'temperature': msg.temperature,
+                'error_flags': msg.error_flags,
+                'last_update': current_time
+            }
+            self.calibration_complete = msg.calibrated_flag
             self.last_motor_update = current_time
             
             # Check for immediate safety issues
@@ -199,14 +197,12 @@ class EmergencyStopNode:
                 self.manual_stop_received = True
             self.trigger_emergency_stop("Manual stop triggered")
 
-    def exoskeleton_state_callback(self, msg):
-        """Monitor exoskeleton state for calibration status."""
-        with self.state_lock:
-            if hasattr(msg, 'is_calibrated'):
-                self.calibration_complete = msg.is_calibrated
-            if hasattr(msg, 'calibration_state'):
-                # Update calibration status based on detailed state
-                self.calibration_complete = (msg.calibration_state == "completed")
+    def calibration_trigger_callback(self, msg):
+        """Handle manual calibration trigger."""
+        if msg.trigger:
+            rospy.loginfo("Manual calibration trigger received")
+            with self.state_lock:
+                self.manual_calibration_trigger = True
 
     def check_motor_safety(self, msg):
         """Check motor status for safety violations."""
@@ -328,7 +324,8 @@ class InitState(smach.State):
         rate = rospy.Rate(10)  # 10 Hz
         while not rospy.is_shutdown():
             with self.node.state_lock:
-                if self.node.calibration_complete:
+                if self.node.manual_calibration_trigger:
+                    self.node.manual_calibration_trigger = False  # Reset trigger
                     return 'start_calibration'
             
             if self.node.emergency_active:
