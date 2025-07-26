@@ -8,7 +8,7 @@ import math
 from enum import Enum
 from exoskeleton_control.msg import MotorStatus, EStopTrigger, CalibrationTrigger
 import mit_motor_controller as motor_driver
-import candle_driver
+import can
 
 class CalibrationState(Enum):
     """Calibration state machine states"""
@@ -100,6 +100,12 @@ class SingleMotorControlNode:
                 'angle_limits_deg': rospy.get_param('~motor/angle_limits_deg', [-45, 45]),
                 'motor_direction': rospy.get_param('~motor/direction', 1)
             }
+
+            # CAN interface parameters
+            self.can_bustype = rospy.get_param('~can_bustype', 'socketcan')
+            self.can_channel = rospy.get_param('~can_channel', 'can0')
+            self.can_bitrate = rospy.get_param('~can_bitrate', 1000000)
+
             rospy.loginfo("Configuration loaded.")
         except Exception as e:
             rospy.logerr(f"Error loading configuration: {e}")
@@ -132,19 +138,12 @@ class SingleMotorControlNode:
     def initialize_can_interface(self):
         """Initialize CAN interface."""
         try:
-            devices = candle_driver.list_devices()
-            if not devices:
-                rospy.logerr('No candle devices found.')
-                return False
-            device = devices[0]
-            if not device.open():
-                rospy.logerr("Failed to open CAN device")
-                return False
-            self.can_channel = device.channel(0)
-            self.can_channel.set_bitrate(1000000)
-            if not self.can_channel.start():
-                rospy.logerr("Failed to start CAN channel")
-                return False
+            rospy.loginfo(f"Initializing CAN bus: bustype={self.can_bustype}, channel={self.can_channel}, bitrate={self.can_bitrate}")
+            self.can_channel = can.interface.Bus(
+                channel=self.can_channel, 
+                bustype=self.can_bustype, 
+                bitrate=self.can_bitrate
+            )
             rospy.loginfo("CAN interface initialized.")
             return True
         except Exception as e:
@@ -324,7 +323,7 @@ class SingleMotorControlNode:
         self.emergency_stop_motor()
         motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
         if self.can_channel:
-            self.can_channel.stop()
+            self.can_channel.shutdown()
 
 if __name__ == '__main__':
     try:

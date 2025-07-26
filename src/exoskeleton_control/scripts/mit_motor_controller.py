@@ -1,4 +1,4 @@
-import candle_driver
+import can
 import struct
 import time
 from enum import Enum
@@ -131,35 +131,36 @@ def uint_to_float(x_int, x_min, x_max, bits):
         return (float(x_int) * span / 65535.0) + offset
     return 0.0
 
-def send_can_message(channel, id, data):
+def send_can_message(bus, id, data):
     """Send CAN message with error handling"""
     try:
         if isinstance(data, bytearray):
             data = bytes(data)
         
         print(f"Sending CAN message: ID={hex(id)}, Data={[hex(b) for b in data]}")
-        channel.write(id, data)
+        message = can.Message(arbitration_id=id, data=data, is_extended_id=False)
+        bus.send(message)
         return True
-    except Exception as e:
+    except can.CanError as e:
         print(f"Message NOT sent: {e}")
         return False
 
-def enter_mode(channel, controller_id):
+def enter_mode(bus, controller_id):
     """Enter MIT control mode"""
     data = bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC])
-    return send_can_message(channel, controller_id, data)
+    return send_can_message(bus, controller_id, data)
 
-def exit_mode(channel, controller_id):
+def exit_mode(bus, controller_id):
     """Exit MIT control mode"""
     data = bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD])
-    return send_can_message(channel, controller_id, data)
+    return send_can_message(bus, controller_id, data)
 
-def zero_position(channel, controller_id):
+def zero_position(bus, controller_id):
     """Set current position as zero position"""
     data = bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE])
-    return send_can_message(channel, controller_id, data)
+    return send_can_message(bus, controller_id, data)
 
-def pack_cmd(channel, motor_controller: MotorController, motor_state: MotorState):
+def pack_cmd(bus, motor_controller: MotorController, motor_state: MotorState):
     """Pack and send control command to motor"""
     # Constrain values to motor limits
     p_des = max(min(motor_state.p_in, motor_controller.p_max), motor_controller.p_min)
@@ -186,7 +187,7 @@ def pack_cmd(channel, motor_controller: MotorController, motor_state: MotorState
     buf[6] = ((kd_int & 0xF) << 4) | (t_int >> 8)         # KD Low 4 bits + Torque High 4 bits
     buf[7] = t_int & 0xFF                                  # Torque Low 8 bits
 
-    return send_can_message(channel, motor_controller.controller_id, bytes(buf))
+    return send_can_message(bus, motor_controller.controller_id, bytes(buf))
 
 def is_command_echo(data):
     """Check if received data is a command echo rather than motor status"""
@@ -257,12 +258,12 @@ def unpack_reply(data, motor_controller: MotorController, motor_state: MotorStat
     
     return True
 
-def read_motor_status(channel, motor_controller: MotorController, motor_state: MotorState, max_attempts=3, timeout_ms=100):
+def read_motor_status(bus, motor_controller: MotorController, motor_state: MotorState, max_attempts=3, timeout_ms=100):
     """
     Read motor status with retry mechanism and proper response filtering
     
     Args:
-        channel: CAN channel object
+        bus: CAN bus object
         motor_controller: MotorController instance
         motor_state: MotorState instance to update
         max_attempts: Maximum number of read attempts
@@ -274,12 +275,20 @@ def read_motor_status(channel, motor_controller: MotorController, motor_state: M
     for attempt in range(max_attempts):
         try:
             # Read CAN frame
-            frame_type, can_id, can_data, extended, timestamp = channel.read(timeout_ms)
+            msg = bus.recv(timeout=timeout_ms / 1000.0)
+            if msg is None:
+                print(f"Timeout waiting for motor response (attempt {attempt+1}/{max_attempts})")
+                if attempt < max_attempts - 1:
+                    time.sleep(0.02)
+                continue
+
+            can_id = msg.arbitration_id
+            can_data = msg.data
             
-            print(f"Received: ID={hex(can_id)}, Extended={extended}, Data={[hex(b) for b in can_data]}")
+            print(f"Received: ID={hex(can_id)}, Extended={msg.is_extended_id}, Data={[hex(b) for b in can_data]}")
 
             # Check if frame is extended (MIT Mode uses Standard CAN frames only)
-            if extended:
+            if msg.is_extended_id:
                 print(f"Warning: Received Extended CAN frame (ID={hex(can_id)}). MIT Mode uses Standard frames only. Ignoring.")
                 continue
 
@@ -295,17 +304,13 @@ def read_motor_status(channel, motor_controller: MotorController, motor_state: M
             else:
                 print(f"Received message from different ID: {hex(can_id)} (expected: {hex(motor_controller.controller_id)})")
 
-        except TimeoutError:
-            print(f"Timeout waiting for motor response (attempt {attempt+1}/{max_attempts})")
-            if attempt < max_attempts - 1:
-                time.sleep(0.02)
-        except Exception as e:
+        except can.CanError as e:
             print(f"Error reading motor status: {e}")
 
     print("Failed to receive valid motor status after all attempts")
     return False
 
-def request_motor_status(channel, controller_id):
+def request_motor_status(bus, controller_id):
     """
     Request motor status using stateless command
     According to the PDF: (0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC)
@@ -314,7 +319,7 @@ def request_motor_status(channel, controller_id):
     # This might need to be adjusted based on actual motor firmware
     # Some motors respond automatically, others need specific status request
     data = bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC])
-    return send_can_message(channel, controller_id, data)
+    return send_can_message(bus, controller_id, data)
 
 def print_menu():
     print("\n=== CubeMars Motor Control Menu ===")
@@ -356,20 +361,20 @@ def select_motor_model():
         except ValueError:
             print("Please enter a valid number")
 
-def run_auto_test(channel, motor_controller: MotorController, motor_state: MotorState):
+def run_auto_test(bus, motor_controller: MotorController, motor_state: MotorState):
     """Run automatic test sequence with motor-specific parameters"""
     print(f"\n=== Running Auto Test for {motor_controller.model.value} ===")
 
     # Enter MIT mode
     print("Entering MIT Mode...")
-    if not enter_mode(channel, motor_controller.controller_id):
+    if not enter_mode(bus, motor_controller.controller_id):
         print("Failed to enter MIT mode")
         return
     time.sleep(0.2)
 
     # Zero position
     print("Zeroing position...")
-    if not zero_position(channel, motor_controller.controller_id):
+    if not zero_position(bus, motor_controller.controller_id):
         print("Failed to zero position")
         return
     time.sleep(0.2)
@@ -389,14 +394,14 @@ def run_auto_test(channel, motor_controller: MotorController, motor_state: Motor
         motor_state.t_in = 0.0    # No feedforward torque
 
         # Send command
-        if not pack_cmd(channel, motor_controller, motor_state):
+        if not pack_cmd(bus, motor_controller, motor_state):
             print(f"Failed to send command for position {pos}")
             continue
         
         time.sleep(1.0)  # Wait for movement
 
         # Read status
-        if read_motor_status(channel, motor_controller, motor_state):
+        if read_motor_status(bus, motor_controller, motor_state):
             print(f"  Actual Position: {motor_state.p_out:.3f} rad")
             print(f"  Velocity: {motor_state.v_out:.3f} rad/s") 
             print(f"  Torque: {motor_state.t_out:.3f} N·m")
@@ -418,37 +423,17 @@ def main():
     motor_controller = MotorController(model, controller_id)
     motor_state = MotorState()
 
-    # List and select CAN device
-    devices = candle_driver.list_devices()
-    if not devices:
-        print('No candle devices found.')
-        return
+    # Get CAN interface parameters from user
+    # For Linux, bustype='socketcan'. For Windows, common options are 'pcan', 'kvaser', 'vector'.
+    # The channel depends on the hardware setup.
+    bustype = input("Enter CAN bustype (e.g., 'socketcan', 'pcan', 'kvaser'): ")
+    channel = input("Enter CAN channel (e.g., 'can0', 'pcanusb1'): ")
+    bitrate = int(input("Enter bitrate (default 1000000): ") or "1000000")
 
-    print(f'\nFound {len(devices)} candle devices.')
-    for i, device in enumerate(devices):
-        print(f"Device {i}: {device.name()} - {device.path()}")
-
-    device_index = 0
-    if len(devices) > 1:
-        device_index = int(input("Select device by number: "))
-
-    device = devices[device_index]
-    print(f'\nUsing device: {device.name()}')
-
+    bus = None
     try:
         # Initialize CAN interface
-        if not device.open():
-            print("Failed to open device")
-            return
-
-        ch = device.channel(0)
-        ch.set_bitrate(1000000)  # 1 Mbps
-
-        if not ch.start():
-            print("Failed to start CAN channel")
-            device.close()
-            return
-
+        bus = can.interface.Bus(channel=channel, bustype=bustype, bitrate=bitrate)
         print("CAN bus initialized successfully!")
         print(f"Motor: {motor_controller.model.value}")
         print(f"Controller ID: 0x{motor_controller.controller_id:X}")
@@ -463,12 +448,12 @@ def main():
 
             elif choice == '1':
                 print("Entering MIT Mode...")
-                enter_mode(ch, motor_controller.controller_id)
+                enter_mode(bus, motor_controller.controller_id)
                 time.sleep(0.1)
 
             elif choice == '2':
                 print("Exiting MIT Mode...")
-                exit_mode(ch, motor_controller.controller_id)
+                exit_mode(bus, motor_controller.controller_id)
                 time.sleep(0.1)
 
             elif choice == '3':
@@ -480,12 +465,12 @@ def main():
                 motor_state.t_in = get_float_input("torque", motor_controller.t_min, motor_controller.t_max)
 
                 print("Sending command...")
-                pack_cmd(ch, motor_controller, motor_state)
+                pack_cmd(bus, motor_controller, motor_state)
                 time.sleep(0.1)
 
             elif choice == '4':
                 print("Reading motor status...")
-                if read_motor_status(ch, motor_controller, motor_state):
+                if read_motor_status(bus, motor_controller, motor_state):
                     print(f"\nMotor Status ({motor_controller.model.value}):")
                     print(f"  Motor ID: {motor_state.motor_id}")
                     print(f"  Position: {motor_state.p_out:.4f} rad")
@@ -496,17 +481,17 @@ def main():
 
             elif choice == '5':
                 print("Zeroing position...")
-                zero_position(ch, motor_controller.controller_id)
+                zero_position(bus, motor_controller.controller_id)
                 time.sleep(0.1)
 
             elif choice == '6':
-                run_auto_test(ch, motor_controller, motor_state)
+                run_auto_test(bus, motor_controller, motor_state)
 
             elif choice == '7':
                 print("Requesting motor status...")
-                request_motor_status(ch, motor_controller.controller_id)
+                request_motor_status(bus, motor_controller.controller_id)
                 time.sleep(0.1)
-                read_motor_status(ch, motor_controller, motor_state)
+                read_motor_status(bus, motor_controller, motor_state)
 
             else:
                 print("Invalid choice! Please select 1-7 or q")
@@ -517,14 +502,14 @@ def main():
         print(f"Error: {e}")
     finally:
         # Cleanup
-        try:
-            print("\nCleaning up...")
-            exit_mode(ch, motor_controller.controller_id)
-            ch.stop()
-            device.close()
-            print("CAN interface closed successfully")
-        except Exception as e:
-            print(f"Error during cleanup: {e}")
+        if bus:
+            try:
+                print("\nCleaning up...")
+                exit_mode(bus, motor_controller.controller_id)
+                bus.shutdown()
+                print("CAN interface closed successfully")
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
 
 if __name__ == "__main__":
     main()

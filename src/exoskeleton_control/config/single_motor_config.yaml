@@ -19,6 +19,6 @@ motor:
   id: 1
   controller_id: 0x06
   joint_name: "test_motor"
-  model: "AK80_64"
+  model: "AK80_8"
   angle_limits_deg: [-45, 45]
   direction: 1

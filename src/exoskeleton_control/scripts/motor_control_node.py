@@ -8,7 +8,7 @@ import math
 from enum import Enum
 from exoskeleton_control.msg import JointsTrajectory, ExoskeletonState, MotorStatus, Torques, EStopTrigger, CalibrationTrigger
 import mit_motor_controller as motor_driver
-import candle_driver
+import can
 
 class CalibrationState(Enum):
     """Calibration state machine states"""
@@ -282,6 +282,11 @@ class MotorControlNode:
                 'motor_directions': rospy.get_param('~motor_directions', [1, 1, 1, 1])
             }
 
+            # CAN interface parameters
+            self.can_bustype = rospy.get_param('~can_bustype', 'socketcan')
+            self.can_channel = rospy.get_param('~can_channel', 'can0')
+            self.can_bitrate = rospy.get_param('~can_bitrate', 1000000)
+
             rospy.loginfo("Configuration parameters loaded successfully from parameter server")
 
         except Exception as e:
@@ -312,6 +317,11 @@ class MotorControlNode:
             'angle_limits_deg': [[-30, 90], [-100, 0], [-30, 90], [-100, 0]],
             'motor_directions': [1, 1, 1, 1]
         }
+
+        # CAN interface parameters
+        self.can_bustype = 'socketcan'
+        self.can_channel = 'can0'
+        self.can_bitrate = 1000000
 
     def setup_motor_configurations(self):
         """Setup motor configurations from loaded parameters."""
@@ -366,33 +376,17 @@ class MotorControlNode:
             rospy.signal_shutdown("Failed to setup motor configurations")
 
     def initialize_can_interface(self):
-        """Initialize CAN interface using candle_driver."""
+        """Initialize CAN interface using python-can."""
         try:
-            # List available CAN devices
-            devices = candle_driver.list_devices()
-            if not devices:
-                rospy.logerr('No candle devices found.')
-                return False
+            rospy.loginfo(f"Initializing CAN bus: bustype={self.can_bustype}, channel={self.can_channel}, bitrate={self.can_bitrate}")
 
-            # Use first available device
-            device = devices[0]
-            rospy.loginfo(f'Using CAN device: {device.name()}')
-
-            # Open device
-            if not device.open():
-                rospy.logerr("Failed to open CAN device")
-                return False
-
-            # Get CAN channel
-            self.can_channel = device.channel(0)
-            self.can_channel.set_bitrate(1000000)  # 1 Mbps
-
-            # Start CAN channel
-            if not self.can_channel.start():
-                rospy.logerr("Failed to start CAN channel")
-                device.close()
-                return False
-
+            # Initialize CAN interface
+            self.can_channel = can.interface.Bus(
+                channel=self.can_channel, 
+                bustype=self.can_bustype, 
+                bitrate=self.can_bitrate
+            )
+            
             rospy.loginfo("CAN interface initialized successfully!")
             return True
 
@@ -884,7 +878,7 @@ class MotorControlNode:
 
         # Close CAN interface
         if self.can_channel:
-            self.can_channel.stop()
+            self.can_channel.shutdown()
         
         rospy.loginfo("Motor control node shutdown complete")
 
