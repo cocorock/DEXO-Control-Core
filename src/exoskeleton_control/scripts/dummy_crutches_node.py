@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Dummy Crutches Node - Manual trigger interface for testing
 Provides CLI interface to send stop_trigger and calibration_trigger messages

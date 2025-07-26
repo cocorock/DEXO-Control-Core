@@ -7,7 +7,7 @@ import time
 import math
 from enum import Enum
 from exoskeleton_control.msg import JointsTrajectory, ExoskeletonState, MotorStatus, Torques, EStopTrigger, CalibrationTrigger
-import MIT_motor_controller_v2 as motor_driver
+import mit_motor_controller as motor_driver
 import candle_driver
 
 class CalibrationState(Enum):
