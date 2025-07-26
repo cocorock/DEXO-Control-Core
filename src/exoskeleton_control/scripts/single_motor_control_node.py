@@ -290,13 +290,14 @@ class SingleMotorControlNode:
     def publish_motor_status(self):
         msg = MotorStatus()
         msg.header.stamp = rospy.Time.now()
-        msg.motor_ids = [self.motor_config.motor_id]
-        msg.joint_names = [self.motor_config.joint_name]
-        msg.positions = [self.motor_position]
-        msg.velocities = [self.motor_velocity]
-        msg.torques = [self.motor_torque]
-        msg.temperatures = [self.motor_temperature]
-        msg.errors = [self.motor_error_flag]
+        msg.motor_id = self.motor_config.motor_id
+        msg.joint_name = self.motor_config.joint_name
+        msg.calibrated_flag = self.motor_config.is_calibrated
+        msg.position = self.motor_position
+        msg.velocity = self.motor_velocity
+        msg.torque = self.motor_torque
+        msg.temperature = self.motor_temperature
+        msg.error_flags = self.motor_error_flag
         self.motor_status_pub.publish(msg)
 
     def run(self):
@@ -321,7 +322,8 @@ class SingleMotorControlNode:
     def shutdown(self):
         rospy.loginfo("Shutting down single motor control node...")
         self.emergency_stop_motor()
-        motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
+        if self.can_channel and self.motor_controller:
+            motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
         if self.can_channel:
             self.can_channel.shutdown()
 

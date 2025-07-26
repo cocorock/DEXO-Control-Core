@@ -45,6 +45,7 @@ class EmergencyStopNode:
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
+        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger', CalibrationTrigger, queue_size=1)
         
         # Create SMACH state machine
         self.create_state_machine()
@@ -326,13 +327,9 @@ class InitState(smach.State):
         
         rate = rospy.Rate(10)  # 10 Hz
         while not rospy.is_shutdown():
-            # Check for calibration start (this would be triggered by calibration_trigger topic)
-            # For now, we'll assume calibration starts automatically after a delay
-            rospy.sleep(1.0)
-            
-            # In real implementation, this would be triggered by calibration_trigger
-            if True:  # Placeholder condition
-                return 'start_calibration'
+            with self.node.state_lock:
+                if self.node.calibration_complete:
+                    return 'start_calibration'
             
             if self.node.emergency_active:
                 return 'error'
@@ -352,6 +349,11 @@ class CalibratingState(smach.State):
         self.node.update_state(SystemStates.CALIBRATING)
         rospy.loginfo('System in CALIBRATING state')
         
+        # Send calibration trigger
+        calibration_msg = CalibrationTrigger()
+        calibration_msg.trigger = True
+        self.node.calibration_trigger_pub.publish(calibration_msg)
+
         rate = rospy.Rate(10)  # 10 Hz
         calibration_start_time = rospy.Time.now()
         max_calibration_time = 120.0  # 2 minutes maximum

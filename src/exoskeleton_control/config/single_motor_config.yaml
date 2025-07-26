@@ -8,10 +8,10 @@ max_calibration_time: 30.0  # seconds
 # Control Gains
 gains:
   calibration:
-    kp: 10.0
+    kp: 5.0
     kd: 1.0
   trajectory:
-    kp: 50.0
+    kp: 10.0
     kd: 2.0
 
 # Single Motor Configuration
@@ -19,6 +19,6 @@ motor:
   id: 1
   controller_id: 0x06
   joint_name: "test_motor"
-  model: "AK80_8"
+  model: "AK80-8"
   angle_limits_deg: [-45, 45]
   direction: 1
