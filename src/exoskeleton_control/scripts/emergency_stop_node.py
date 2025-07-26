@@ -5,7 +5,7 @@ import smach
 import smach_ros
 import threading
 import time
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, StopTrigger, CalibrationTrigger, ExoskeletonState
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, StopTrigger, CalibrationTrigger, CalibrationTriggerFw, ExoskeletonState
 
 class SystemStates:
     """System state constants"""
@@ -42,11 +42,11 @@ class EmergencyStopNode:
         # Subscribers
         rospy.Subscriber('MotorStatus', MotorStatus, self.motor_status_callback)
         rospy.Subscriber('stop_trigger', StopTrigger, self.stop_trigger_callback)
-        rospy.Subscriber('calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
+        rospy.Subscriber('manual_calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger', CalibrationTrigger, queue_size=1)
+        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger_fw', CalibrationTriggerFw, queue_size=1)
         
         # Create SMACH state machine
         self.create_state_machine()
@@ -175,15 +175,16 @@ class EmergencyStopNode:
         current_time = rospy.Time.now()
         
         with self.state_lock:
-            self.motor_data[msg.motor_id] = {
-                'position': msg.position,
-                'velocity': msg.velocity,
-                'torque': msg.torque,
-                'temperature': msg.temperature,
-                'error_flags': msg.error_flags,
-                'last_update': current_time
-            }
-            self.calibration_complete = msg.calibrated_flag
+            for i, motor_id in enumerate(msg.motor_ids):
+                self.motor_data[motor_id] = {
+                    'position': msg.positions[i],
+                    'velocity': msg.velocities[i],
+                    'torque': msg.torques[i],
+                    'temperature': msg.temperatures[i],
+                    'error_flags': msg.error_flags[i],
+                    'last_update': current_time
+                }
+            self.calibration_complete = all(msg.calibrated_flags)
             self.last_motor_update = current_time
             
             # Check for immediate safety issues
@@ -325,6 +326,7 @@ class InitState(smach.State):
         while not rospy.is_shutdown():
             with self.node.state_lock:
                 if self.node.manual_calibration_trigger:
+                    rospy.loginfo('Calibration trigger received - starting calibration')
                     self.node.manual_calibration_trigger = False  # Reset trigger
                     return 'start_calibration'
             
@@ -346,10 +348,12 @@ class CalibratingState(smach.State):
         self.node.update_state(SystemStates.CALIBRATING)
         rospy.loginfo('System in CALIBRATING state')
         
-        # Send calibration trigger
-        calibration_msg = CalibrationTrigger()
+        # Send calibration trigger once
+        calibration_msg = CalibrationTriggerFw()
+        calibration_msg.header.stamp = rospy.Time.now()
         calibration_msg.trigger = True
         self.node.calibration_trigger_pub.publish(calibration_msg)
+        rospy.loginfo('Calibration trigger sent to motor control node')
 
         rate = rospy.Rate(10)  # 10 Hz
         calibration_start_time = rospy.Time.now()

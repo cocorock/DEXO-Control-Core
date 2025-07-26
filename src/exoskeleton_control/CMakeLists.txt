@@ -13,6 +13,7 @@ add_message_files(
   EStopTrigger.msg
   StopTrigger.msg
   CalibrationTrigger.msg
+  CalibrationTriggerFw.msg
   GaitParams.msg
   JointsTrajectory.msg
   ExoskeletonState.msg
