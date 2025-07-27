@@ -160,7 +160,50 @@ def zero_position(bus, controller_id):
     data = bytes([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE])
     return send_can_message(bus, controller_id, data)
 
-def pack_cmd(bus, motor_controller: MotorController, motor_state: MotorState):
+def safe_zero_position(bus, motor_controller: MotorController, motor_state: MotorState, debug_flag=False):
+    """Safely zero position with proper exit/enter sequence"""
+    print("Safe zero position procedure:")
+    
+    # # Step 1: Exit MIT mode
+    # print("  1. Exiting MIT mode...")
+    # if not exit_mode(bus, motor_controller.controller_id):
+    #     print("  Failed to exit MIT mode")
+    #     return False
+    # time.sleep(0.2)
+    # read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
+    
+    # Step 2: Set zero position (while in exit mode)
+    print("  2. Setting zero position...")
+    if not zero_position(bus, motor_controller.controller_id):
+        print("  Failed to zero position")
+        return False
+    time.sleep(0.2)
+    read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
+    
+    # # Step 3: Re-enter MIT mode
+    # print("  3. Re-entering MIT mode...")
+    # if not enter_mode(bus, motor_controller.controller_id):
+    #     print("  Failed to re-enter MIT mode")
+    #     return False
+    # time.sleep(0.2)
+    # read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
+    
+    print("  ✓ Zero position procedure completed")
+    return True
+
+def send_command_with_response(bus, motor_controller: MotorController, motor_state: MotorState, debug_flag=False):
+    """Send command and always read response to clear buffer"""
+    # Send command
+    if not pack_cmd(bus, motor_controller, motor_state, debug_flag):
+        print("Failed to send command")
+        return False
+    
+    # Always read response to clear buffer
+    time.sleep(0.1)  # Brief delay for motor to respond
+    read_motor_status(bus, motor_controller, motor_state, max_attempts=2, timeout_ms=100, debug_flag=debug_flag)
+    return True
+
+def pack_cmd(bus, motor_controller: MotorController, motor_state: MotorState, debug_flag=True):
     """Pack and send control command to motor"""
     # Constrain values to motor limits
     p_des = max(min(motor_state.p_in, motor_controller.p_max), motor_controller.p_min)
@@ -175,6 +218,9 @@ def pack_cmd(bus, motor_controller: MotorController, motor_state: MotorState):
     kp_int = float_to_uint(kp, motor_controller.kp_min, motor_controller.kp_max, 12)
     kd_int = float_to_uint(kd, motor_controller.kd_min, motor_controller.kd_max, 12)
     t_int = float_to_uint(t_ff, motor_controller.t_min, motor_controller.t_max, 12)
+    
+    if debug_flag:
+        print(f"PACK_CMD: p={p_des:.3f}→{p_int}, v={v_des:.3f}→{v_int}, kp={kp:.3f}→{kp_int}, kd={kd:.3f}→{kd_int}, t={t_ff:.3f}→{t_int}")
 
     # Pack into 8-byte CAN frame according to protocol
     buf = bytearray(8)
@@ -192,42 +238,21 @@ def pack_cmd(bus, motor_controller: MotorController, motor_state: MotorState):
 def is_command_echo(data):
     """Check if received data is a command echo rather than motor status"""
     if len(data) == 8:
-        # Check for MIT mode commands
+        # Check for MIT mode special commands (Enter/Exit/Zero position)
         if data[0] == 0xFF and data[1] == 0xFF and data[7] in [0xFC, 0xFD, 0xFE]:
             return True
-        # Check if it looks like a position command (first byte is not motor ID)
-        if data[0] != 0x17:  # 0x17 is typical motor ID in status responses
-            return True
+        # Based on the PDF clarification, both command echoes and motor responses
+        # may have similar formats. The key distinction is timing and context.
+        # For now, focus on filtering the obvious special command echoes.
+        # Additional filtering can be done based on CAN ID matching in the calling code.
     return False
 
-def unpack_reply(data, motor_controller: MotorController, motor_state: MotorState):
+def unpack_reply(data, motor_controller: MotorController, motor_state: MotorState, debug_flag=True):
     """
-    Unpack motor response data according to MIT Mode Driver Board Receive Data Definition
+    Unpack motor response data according to MIT Mode Driver Board Send Data Definition
+    (What the motor sends TO us - from motor's perspective this is 'send')
     
-    Data format (8 bytes):
-    DATA[0]: Motor ID (7-0)
-    DATA[1]: Motor Position High 8 bits (7-0)
-    DATA[2]: Motor Position Low 8 bits (7-0)
-    DATA[3]: Motor Speed High 8 bits (7-0)
-    DATA[4]: Motor Speed Low 4 bits (7-4) + KP Value High 4 bits (3-0)
-    DATA[5]: KP Value Low 8 bits (7-0)
-    DATA[6]: KD Value High 8 bits (7-0)
-    DATA[7]: KD Value Low 4 bits (7-4) + Current Value High 4 bits (3-0)
-    DATA[8]: Current Value Low 8 bits (7-0) - Wait, this should be in a different format
-    
-    Actually, based on the receive table, the format is:
-    DATA[0]: Motor ID
-    DATA[1-2]: Motor Position (16 bits)
-    DATA[3]: Motor Speed High 8 bits
-    DATA[4]: Motor Speed Low 4 bits + KP High 4 bits  
-    DATA[5]: KP Low 8 bits
-    DATA[6]: KD High 8 bits
-    DATA[7]: KD Low 4 bits + Current High 4 bits
-    DATA[8]: Current Low 8 bits
-    
-    But CAN frames are 8 bytes max, so let me check the actual receive format...
     """
-    debugFlag = False
 
     if data is None or len(data) < 6:
         print("Note:len(data) < 6")
@@ -238,7 +263,13 @@ def unpack_reply(data, motor_controller: MotorController, motor_state: MotorStat
         print("Note: Received command echo, not motor status")
         return False
 
-    # Extract motor ID
+    # Following PDF example code exactly from page 4:
+    # int id = msg.data[0]; //Driver ID  
+    # int p_int = (msg.data[1]<<8)|msg.data[2]; // Motor Position Data
+    # int v_int = (msg.data[3]<<4)|(msg.data[4]>>4); // Motor Speed Data  
+    # int i_int = ((msg.data[4]&0xF)<<8)|msg.data[5]; //Motor Torque Data
+    
+    # Extract motor/driver ID
     motor_state.motor_id = data[0]
     
     # Extract position (16 bits)
@@ -249,19 +280,21 @@ def unpack_reply(data, motor_controller: MotorController, motor_state: MotorStat
     v_int = (data[3] << 4) | (data[4] >> 4)
     motor_state.v_out = uint_to_float(v_int, motor_controller.v_min, motor_controller.v_max, 12)
     
-    # Extract current/torque (12 bits) - from lower 4 bits of data[4] and data[5]
+    # Extract current/torque (12 bits) 
     i_int = ((data[4] & 0xF) << 8) | data[5]
     motor_state.t_out = uint_to_float(i_int, motor_controller.t_min, motor_controller.t_max, 12)
     
-    # If more data is available, extract additional fields
+    # Extract additional fields if available (temperature, error flags)
     if len(data) >= 7:
-        # Could include temperature or error flags in extended responses
         motor_state.temperature = data[6] if len(data) > 6 else 0
         motor_state.error_flag = data[7] if len(data) > 7 else 0
     
+    if debug_flag:
+        print(f"UNPACK_REPLY: id={motor_state.motor_id}, p={p_int}→{motor_state.p_out:.3f}, v={v_int}→{motor_state.v_out:.3f}, i={i_int}→{motor_state.t_out:.3f}")
+    
     return True
 
-def read_motor_status(bus, motor_controller: MotorController, motor_state: MotorState, max_attempts=3, timeout_ms=100):
+def read_motor_status(bus, motor_controller: MotorController, motor_state: MotorState, max_attempts=3, timeout_ms=100, debug_flag=True):
     """
     Read motor status with retry mechanism and proper response filtering
     
@@ -298,7 +331,7 @@ def read_motor_status(bus, motor_controller: MotorController, motor_state: Motor
             # Check if message is from our motor
             if can_id == motor_controller.controller_id:
                 # Try to unpack the response
-                if unpack_reply(can_data, motor_controller, motor_state):
+                if unpack_reply(can_data, motor_controller, motor_state, debug_flag):
                     print(f"Valid motor status received from Motor ID: {motor_state.motor_id}")
                     return True
                 elif attempt < max_attempts - 1:
@@ -364,26 +397,17 @@ def select_motor_model():
         except ValueError:
             print("Please enter a valid number")
 
-def run_auto_test(bus, motor_controller: MotorController, motor_state: MotorState):
+def run_auto_test(bus, motor_controller: MotorController, motor_state: MotorState, debug_flag=True):
     """Run automatic test sequence with motor-specific parameters"""
     print(f"\n=== Running Auto Test for {motor_controller.model.value} ===")
 
-    # Enter MIT mode
-    print("Entering MIT Mode...")
-    if not enter_mode(bus, motor_controller.controller_id):
-        print("Failed to enter MIT mode")
+    # Safe zero position procedure (exit → zero → enter)
+    if not safe_zero_position(bus, motor_controller, motor_state, debug_flag):
+        print("Failed to complete zero position procedure")
         return
-    time.sleep(0.2)
-
-    # Zero position
-    print("Zeroing position...")
-    if not zero_position(bus, motor_controller.controller_id):
-        print("Failed to zero position")
-        return
-    time.sleep(0.2)
 
     # Test positions scaled to motor capabilities
-    max_test_pos = min(2.0, motor_controller.p_max * 0.5)  # Conservative test range
+    max_test_pos = min(3.14, motor_controller.p_max * 0.5)  # Conservative test range
     test_positions = [0.0, max_test_pos, -max_test_pos, max_test_pos*0.5, -max_test_pos*0.5, 0.0]
 
     for pos in test_positions:
@@ -392,19 +416,19 @@ def run_auto_test(bus, motor_controller: MotorController, motor_state: MotorStat
         # Set conservative control parameters
         motor_state.p_in = pos
         motor_state.v_in = 0.0
-        motor_state.kp_in = 10.0  # Conservative gain
+        motor_state.kp_in = 5.0  # Conservative gain
         motor_state.kd_in = 1.0   # Conservative damping
         motor_state.t_in = 0.0    # No feedforward torque
 
-        # Send command
-        if not pack_cmd(bus, motor_controller, motor_state):
+        # Send command with automatic response reading
+        if not send_command_with_response(bus, motor_controller, motor_state, debug_flag):
             print(f"Failed to send command for position {pos}")
             continue
         
         time.sleep(1.0)  # Wait for movement
 
-        # Read status
-        if read_motor_status(bus, motor_controller, motor_state):
+        # Read final status
+        if read_motor_status(bus, motor_controller, motor_state, debug_flag=debug_flag):
             print(f"  Actual Position: {motor_state.p_out:.3f} rad")
             print(f"  Velocity: {motor_state.v_out:.3f} rad/s") 
             print(f"  Torque: {motor_state.t_out:.3f} N·m")
@@ -422,6 +446,10 @@ def main():
     # Get controller ID
     controller_id = int(input(f"Enter CAN controller ID (default 8): ") or "8")
     
+    # Get debug flag
+    debug_input = input("Enable debug mode? (y/N): ").strip().lower()
+    debug_flag = debug_input in ['y', 'yes', '1', 'true']
+    
     # Initialize motor controller
     motor_controller = MotorController(model, controller_id)
     motor_state = MotorState()
@@ -429,8 +457,8 @@ def main():
     # Get CAN interface parameters from user
     # For Linux, bustype='socketcan'. For Windows, common options are 'pcan', 'kvaser', 'vector'.
     # The channel depends on the hardware setup.
-    bustype = input("Enter CAN bustype (e.g., 'socketcan', 'pcan', 'kvaser'): ")
-    channel = input("Enter CAN channel (e.g., 'can0', 'pcanusb1'): ")
+    bustype = input("Enter CAN bustype (default 'socketcan'): ").strip() or "socketcan"
+    channel = input("Enter CAN channel (default 'can0'): ").strip() or "can0"
     bitrate = int(input("Enter bitrate (default 1000000): ") or "1000000")
 
     bus = None
@@ -453,11 +481,13 @@ def main():
                 print("Entering MIT Mode...")
                 enter_mode(bus, motor_controller.controller_id)
                 time.sleep(0.1)
+                read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
 
             elif choice == '2':
                 print("Exiting MIT Mode...")
                 exit_mode(bus, motor_controller.controller_id)
                 time.sleep(0.1)
+                read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
 
             elif choice == '3':
                 print(f"\nControl Command for {motor_controller.model.value}:")
@@ -467,13 +497,12 @@ def main():
                 motor_state.kd_in = get_float_input("kd", motor_controller.kd_min, motor_controller.kd_max)
                 motor_state.t_in = get_float_input("torque", motor_controller.t_min, motor_controller.t_max)
 
-                print("Sending command...")
-                pack_cmd(bus, motor_controller, motor_state)
-                time.sleep(0.1)
+                print("\n\n \t Sending command...")
+                send_command_with_response(bus, motor_controller, motor_state, debug_flag)
 
             elif choice == '4':
                 print("Reading motor status...")
-                if read_motor_status(bus, motor_controller, motor_state):
+                if read_motor_status(bus, motor_controller, motor_state, debug_flag=debug_flag):
                     print(f"\nMotor Status ({motor_controller.model.value}):")
                     print(f"  Motor ID: {motor_state.motor_id}")
                     print(f"  Position: {motor_state.p_out:.4f} rad")
@@ -483,18 +512,17 @@ def main():
                     print("Failed to read motor status")
 
             elif choice == '5':
-                print("Zeroing position...")
-                zero_position(bus, motor_controller.controller_id)
-                time.sleep(0.1)
+                print("Safe zeroing position...")
+                safe_zero_position(bus, motor_controller, motor_state, debug_flag)
 
             elif choice == '6':
-                run_auto_test(bus, motor_controller, motor_state)
+                run_auto_test(bus, motor_controller, motor_state, debug_flag)
 
             elif choice == '7':
                 print("Requesting motor status...")
                 request_motor_status(bus, motor_controller.controller_id)
                 time.sleep(0.1)
-                read_motor_status(bus, motor_controller, motor_state)
+                read_motor_status(bus, motor_controller, motor_state, debug_flag=debug_flag)
 
             else:
                 print("Invalid choice! Please select 1-7 or q")
