@@ -227,7 +227,10 @@ def unpack_reply(data, motor_controller: MotorController, motor_state: MotorStat
     
     But CAN frames are 8 bytes max, so let me check the actual receive format...
     """
+    debugFlag = False
+
     if data is None or len(data) < 6:
+        print("Note:len(data) < 6")
         return False
 
     # Skip command echoes
