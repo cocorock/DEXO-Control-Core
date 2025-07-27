@@ -12,7 +12,8 @@
   <node name="single_motor_control_node" pkg="exoskeleton_control" type="single_motor_control_node.py" output="screen">
     <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
-    <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
+    <!-- Receives forward calibration triggers from emergency_stop -->
+    <remap from="calibration_trigger_fw" to="/calibration_trigger_fw"/>
   </node>
 
   <!-- Emergency Stop Node -->
@@ -21,6 +22,10 @@
     <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
     <remap from="ExoskeletonState" to="/exoskeleton/state"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <!-- Receives manual calibration triggers from dummy_crutches -->
+    <remap from="manual_calibration_trigger" to="/manual_calibration_trigger"/>
+    <!-- Publishes forward calibration triggers to motor control -->
+    <remap from="calibration_trigger_fw" to="/calibration_trigger_fw"/>
   </node>
 
   

@@ -791,17 +791,14 @@ class MotorControlNode:
         try:
             msg = MotorStatus()
             msg.header.stamp = rospy.Time.now()
-            
-            for i, motor_id in enumerate([1, 2, 3, 4]):
-                motor_msg = MotorStatus()  # Create individual motor status
-                motor_msg.joint_name = self.motor_configs[motor_id].joint_name
-                motor_msg.motor_id = motor_id
-                motor_msg.calibrated_flag = self.motor_configs[motor_id].is_calibrated
-                motor_msg.position = self.motor_positions[i]
-                motor_msg.velocity = self.motor_velocities[i]
-                motor_msg.torque = self.motor_torques[i]
-                motor_msg.temperature = self.motor_temperatures[i]
-                motor_msg.error_flags = int(self.motor_error_flags[i])
+            msg.joint_names = [self.motor_configs[motor_id].joint_name for motor_id in [1, 2, 3, 4]]
+            msg.motor_ids = [1, 2, 3, 4]
+            msg.calibrated_flags = [self.motor_configs[motor_id].is_calibrated for motor_id in [1, 2, 3, 4]]
+            msg.positions = self.motor_positions.tolist()
+            msg.velocities = self.motor_velocities.tolist()
+            msg.torques = self.motor_torques.tolist()
+            msg.temperatures = self.motor_temperatures.tolist()
+            msg.error_flags = self.motor_error_flags.tolist()
 
             self.motor_status_pub.publish(msg)
 

@@ -15,7 +15,7 @@ class DummyCrutchesNode:
         
         # Publishers
         self.stop_trigger_pub = rospy.Publisher('stop_trigger', StopTrigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger', CalibrationTrigger, queue_size=1)
+        self.calibration_trigger_pub = rospy.Publisher('manual_calibration_trigger', CalibrationTrigger, queue_size=1)
         
         # CLI interface running in separate thread
         self.cli_thread = threading.Thread(target=self.cli_interface)

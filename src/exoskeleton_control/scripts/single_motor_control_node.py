@@ -6,7 +6,7 @@ import threading
 import time
 import math
 from enum import Enum
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, CalibrationTrigger
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, CalibrationTriggerFw
 import mit_motor_controller as motor_driver
 import can
 
@@ -47,7 +47,6 @@ class SingleMotorControlNode:
         
         self.motor_controller = None
         self.motor_state = None
-        self.can_channel = None
         
         self.motor_position = 0.0
         self.motor_velocity = 0.0
@@ -72,7 +71,7 @@ class SingleMotorControlNode:
         self.generate_trajectory()
 
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
-        rospy.Subscriber('calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
+        rospy.Subscriber('calibration_trigger_fw', CalibrationTriggerFw, self.calibration_trigger_callback)
 
         self.motor_status_pub = rospy.Publisher('MotorStatus', MotorStatus, queue_size=1)
 
@@ -184,8 +183,12 @@ class SingleMotorControlNode:
             self.is_emergency_stop = False
 
     def calibration_trigger_callback(self, msg):
+        rospy.loginfo("Calibration trigger received")
         if msg.trigger and self.calibration_state == CalibrationState.NOT_STARTED:
+            rospy.loginfo("Starting calibration...")
             self.start_calibration()
+        elif msg.trigger and self.calibration_state != CalibrationState.NOT_STARTED:
+            rospy.logwarn(f"Calibration trigger ignored - current state: {self.calibration_state.value}")
 
     def start_calibration(self):
         self.calibration_state = CalibrationState.CALIBRATING
@@ -292,17 +295,19 @@ class SingleMotorControlNode:
         msg.header.stamp = rospy.Time.now()
         msg.motor_ids = [self.motor_config.motor_id]
         msg.joint_names = [self.motor_config.joint_name]
+        msg.calibrated_flags = [self.motor_config.is_calibrated]
         msg.positions = [self.motor_position]
         msg.velocities = [self.motor_velocity]
         msg.torques = [self.motor_torque]
         msg.temperatures = [self.motor_temperature]
-        msg.errors = [self.motor_error_flag]
+        msg.error_flags = [self.motor_error_flag]
         self.motor_status_pub.publish(msg)
 
     def run(self):
         rospy.loginfo("Starting single motor control loop...")
         while not rospy.is_shutdown():
             if self.calibration_state == CalibrationState.CALIBRATING:
+                rospy.loginfo(".")
                 if self.perform_calibration():
                     self.calibration_state = CalibrationState.COMPLETED
                 else:
@@ -321,7 +326,8 @@ class SingleMotorControlNode:
     def shutdown(self):
         rospy.loginfo("Shutting down single motor control node...")
         self.emergency_stop_motor()
-        motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
+        if self.can_channel and self.motor_controller:
+            motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
         if self.can_channel:
             self.can_channel.shutdown()
 

@@ -1,9 +1,9 @@
 Header header
-string joint_name
-int32 motor_id
-bool calibrated_flag
-float64 position
-float64 velocity
-float64 torque
-float32 temperature
-int32 error_flags
+string[] joint_names
+int32[] motor_ids
+bool[] calibrated_flags
+float64[] positions
+float64[] velocities
+float64[] torques
+float32[] temperatures
+int32[] error_flags
