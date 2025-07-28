@@ -184,49 +184,31 @@ def safe_zero_position(bus, motor_controller: MotorController, motor_state: Moto
     print("Safe zero position procedure:")
     
     # Clear buffer before starting procedure
-    # flush_can_buffer(bus, 0.3)
+    flush_can_buffer(bus, 0.3)
     
-    # Step 1: Send command with all zeros (position=0, velocity=0, kp=0, kd=0, torque=0)
-    print("  1. Sending zero command (p=0, v=0, kp=0, kd=0, t=0)...")
-    motor_state.p_in = 0.0
-    motor_state.v_in = 0.0
-    motor_state.kp_in = 0.0
-    motor_state.kd_in = 0.0
-    motor_state.t_in = 0.0
+    # # Step 1: Exit MIT mode
+    # print("  1. Exiting MIT mode...")
+    # if not exit_mode(bus, motor_controller.controller_id):
+    #     print("  Failed to exit MIT mode")
+    #     return False
+    # time.sleep(0.2)
+    # read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
-    if not pack_cmd(bus, motor_controller, motor_state, debug_flag):
-        print("  Failed to send zero command")
-        return False
-    time.sleep(0.2)
-    read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
-    
-    # Step 2: Exit MIT mode
-    print("  2. Exiting MIT mode...")
-    if not exit_mode(bus, motor_controller.controller_id):
-        print("  Failed to exit MIT mode")
-        return False
-    time.sleep(0.2)
-    read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
-    
-    # Step 3: Set zero position
-    print("  3. Setting zero position...")
+    # Step 2: Set zero position (while in exit mode)
+    print("  2. Setting zero position...")
     if not zero_position(bus, motor_controller.controller_id):
         print("  Failed to zero position")
         return False
     time.sleep(0.2)
     read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
-    # Step 4: Wait 3 seconds
-    print("  4. Waiting 3 seconds...")
-    time.sleep(3.0)
-    
-    # Step 5: Re-enter MIT mode
-    print("  5. Re-entering MIT mode...")
-    if not enter_mode(bus, motor_controller.controller_id):
-        print("  Failed to re-enter MIT mode")
-        return False
-    time.sleep(0.2)
-    read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
+    # # Step 3: Re-enter MIT mode
+    # print("  3. Re-entering MIT mode...")
+    # if not enter_mode(bus, motor_controller.controller_id):
+    #     print("  Failed to re-enter MIT mode")
+    #     return False
+    # time.sleep(0.2)
+    # read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
     print("  ✓ Zero position procedure completed")
     return True
