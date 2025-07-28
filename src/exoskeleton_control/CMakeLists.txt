@@ -11,9 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   EStopTrigger.msg
-  StopTrigger.msg
-  CalibrationTrigger.msg
-  CalibrationTriggerFw.msg
+  Trigger.msg
   GaitParams.msg
   JointsTrajectory.msg
   ExoskeletonState.msg

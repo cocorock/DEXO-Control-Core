@@ -131,13 +131,14 @@ def uint_to_float(x_int, x_min, x_max, bits):
         return (float(x_int) * span / 65535.0) + offset
     return 0.0
 
-def send_can_message(bus, id, data):
+def send_can_message(bus, id, data, debug_flag=False):
     """Send CAN message with error handling"""
     try:
         if isinstance(data, bytearray):
             data = bytes(data)
         
-        print(f"Sending CAN message: ID={hex(id)}, Data={[hex(b) for b in data]}")
+        if debug_flag:
+            print(f"Sending CAN message: ID={hex(id)}, Data={[hex(b) for b in data]}")
         message = can.Message(arbitration_id=id, data=data, is_extended_id=False)
         bus.send(message)
         return True
@@ -377,7 +378,9 @@ def read_motor_status(bus, motor_controller: MotorController, motor_state: Motor
                 
                 # Filter out known noise IDs
                 if can_id in noise_ids:
-                    print(f"Filtering noise frame: ID={hex(can_id)}")
+                    if debug_flag:
+                        print(f"Filtering noise frame: ID={hex(can_id)}")
+                    
                     continue
                 
                 # Check if frame is extended (MIT Mode uses Standard CAN frames only)
@@ -391,13 +394,15 @@ def read_motor_status(bus, motor_controller: MotorController, motor_state: Motor
                     print(f"Filtering likely noise frame (too many zeros): ID={hex(can_id)}, Data={[hex(b) for b in can_data]}")
                     continue
 
-                print(f"Received: ID={hex(can_id)}, Extended={msg.is_extended_id}, Data={[hex(b) for b in can_data]}")
+                if debug_flag:
+                    print(f"Received: ID={hex(can_id)}, Extended={msg.is_extended_id}, Data={[hex(b) for b in can_data]}")
 
                 # Check if message is from our motor
                 if can_id == motor_controller.controller_id:
                     # Try to unpack the response
                     if unpack_reply(can_data, motor_controller, motor_state, debug_flag):
-                        print(f"Valid motor status received from Motor ID: {motor_state.motor_id}")
+                        if debug_flag:
+                            print(f"Valid motor status received from Motor ID: {motor_state.motor_id}")
                         return True
                     else:
                         print("Invalid response format from correct ID, continuing...")

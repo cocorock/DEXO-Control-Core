@@ -5,7 +5,7 @@ import smach
 import smach_ros
 import threading
 import time
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, StopTrigger, CalibrationTrigger, CalibrationTriggerFw, ExoskeletonState
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger, ExoskeletonState
 
 class SystemStates:
     """System state constants"""
@@ -41,12 +41,12 @@ class EmergencyStopNode:
         
         # Subscribers
         rospy.Subscriber('Motor_Status', MotorStatus, self.motor_status_callback)
-        rospy.Subscriber('stop_trigger', StopTrigger, self.stop_trigger_callback)
-        rospy.Subscriber('manual_calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
+        rospy.Subscriber('stop_trigger', Trigger, self.stop_trigger_callback)
+        rospy.Subscriber('manual_calibration_trigger', Trigger, self.calibration_trigger_callback)
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger_fw', CalibrationTriggerFw, queue_size=1)
+        self.calibration_trigger_pub = rospy.Publisher('calibration_trigger_fw', Trigger, queue_size=1)
         
         # Create SMACH state machine
         self.create_state_machine()
@@ -348,7 +348,7 @@ class CalibratingState(smach.State):
         rospy.loginfo('System in CALIBRATING state')
         
         # Send calibration trigger once
-        calibration_msg = CalibrationTriggerFw()
+        calibration_msg = Trigger()
         calibration_msg.header.stamp = rospy.Time.now()
         calibration_msg.trigger = True
         self.node.calibration_trigger_pub.publish(calibration_msg)

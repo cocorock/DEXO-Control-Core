@@ -6,7 +6,7 @@ import threading
 import time
 import math
 from enum import Enum
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, CalibrationTriggerFw
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger
 import mit_motor_controller as motor_driver
 import can
 
@@ -61,7 +61,7 @@ class SingleMotorControlNode:
         self.motor_lock = threading.Lock()
         
         # Debug flag for motor driver functions
-        self.debug_flag = True
+        self.debug_flag = False
 
         if not self.initialize_can_interface():
             rospy.signal_shutdown("Failed to initialize CAN interface")
@@ -71,10 +71,10 @@ class SingleMotorControlNode:
             rospy.signal_shutdown("Failed to initialize motor")
             return
 
-        self.generate_trajectory()
+        # self.generate_trajectory()
 
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
-        rospy.Subscriber('calibration_trigger_fw', CalibrationTriggerFw, self.calibration_trigger_callback)
+        rospy.Subscriber('calibration_trigger_fw', Trigger, self.calibration_trigger_callback)
 
         self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
 
@@ -167,12 +167,12 @@ class SingleMotorControlNode:
             return False
 
     def generate_trajectory(self):
-        """Generates a simple trajectory from -30 to +30 degrees."""
-        min_angle = math.radians(-30)
-        max_angle = math.radians(30)
+        """Generates a simple trajectory ."""
+        min_angle = self.motor_config.min_limit #math.radians(-30)
+        max_angle = self.motor_config.max_limit #math.radians(30)
         # Create a path from min to max and back to min
-        forward_path = np.linspace(min_angle, max_angle, 15)
-        backward_path = np.linspace(max_angle, min_angle, 15)
+        forward_path = np.linspace(min_angle, max_angle, 150)
+        backward_path = np.linspace(max_angle, min_angle, 150)
         self.trajectory = np.concatenate((forward_path, backward_path))
         rospy.loginfo(f"Generated trajectory with {len(self.trajectory)} points.")
 
@@ -215,7 +215,7 @@ class SingleMotorControlNode:
             
             # Read response after entering mode
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
             rospy.loginfo("  Motor entered MIT mode")
             
             # Step 3: Safe zero position (this takes up to 2 seconds and blocks until complete)
@@ -248,7 +248,7 @@ class SingleMotorControlNode:
                     
                     # Always read response after sending command
                     if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                                    max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag):
+                                                    max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag):
                         if abs(self.motor_state.t_out) > self.torque_threshold:
                             limits.append(self.motor_state.p_out)
                             rospy.loginfo(f"    Limit found at {self.motor_state.p_out:.3f} rad")
@@ -260,7 +260,7 @@ class SingleMotorControlNode:
                             time.sleep(0.1)
                             # Read response after stopping
                             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                                          max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                                                          max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
                             time.sleep(0.2)
                             break
                 else:
@@ -275,6 +275,8 @@ class SingleMotorControlNode:
             self.motor_config.min_limit = min(limits)
             self.motor_config.max_limit = max(limits)
             self.motor_config.is_calibrated = True
+
+            self.generate_trajectory()
             
             rospy.loginfo(f"  Limits detected: min={self.motor_config.min_limit:.3f}, max={self.motor_config.max_limit:.3f}")
             
@@ -289,7 +291,7 @@ class SingleMotorControlNode:
             time.sleep(0.1)
             # Read response after moving to center
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=2, timeout_ms=100, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=100, debug_flag=self.debug_flag)
             time.sleep(1.0)
             
             rospy.loginfo("Calibration completed successfully!")
@@ -310,7 +312,7 @@ class SingleMotorControlNode:
         time.sleep(0.1)
         # Read response after exiting mode
         motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                     max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                                     max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
         rospy.loginfo("Calibration reset.")
 
     def emergency_stop_motor(self):
@@ -360,7 +362,7 @@ class SingleMotorControlNode:
             
             # Always read response after sending command to clear buffer
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
 
     def publish_motor_status(self):
         msg = MotorStatus()
@@ -392,7 +394,7 @@ class SingleMotorControlNode:
 
             # Normal operation when calibrated
             if self.calibration_state == CalibrationState.COMPLETED:
-                self.read_motor_state()
+                # self.read_motor_state()
                 self.send_motor_command()
             
             # Always publish status

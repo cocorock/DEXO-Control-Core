@@ -7,15 +7,15 @@ Provides CLI interface to send stop_trigger and calibration_trigger messages
 import rospy
 import threading
 import sys
-from exoskeleton_control.msg import StopTrigger, CalibrationTrigger
+from exoskeleton_control.msg import StopTrigger, Trigger
 
 class DummyCrutchesNode:
     def __init__(self):
         rospy.init_node('dummy_crutches_node')
         
         # Publishers
-        self.stop_trigger_pub = rospy.Publisher('stop_trigger', StopTrigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('manual_calibration_trigger', CalibrationTrigger, queue_size=1)
+        self.stop_trigger_pub = rospy.Publisher('stop_trigger', Trigger, queue_size=1)
+        self.calibration_trigger_pub = rospy.Publisher('manual_calibration_trigger', Trigger, queue_size=1)
         
         # CLI interface running in separate thread
         self.cli_thread = threading.Thread(target=self.cli_interface)
@@ -31,7 +31,7 @@ class DummyCrutchesNode:
 
     def send_calibration_trigger(self):
         """Send calibration trigger message."""
-        msg = CalibrationTrigger()
+        msg = Trigger()
         msg.header.stamp = rospy.Time.now()
         msg.trigger = True
         
@@ -40,7 +40,7 @@ class DummyCrutchesNode:
 
     def send_stop_trigger(self, stop=True):
         """Send stop trigger message."""
-        msg = StopTrigger()
+        msg = Trigger()
         msg.header.stamp = rospy.Time.now()
         msg.trigger = stop
         
