@@ -179,10 +179,20 @@ class SingleMotorControlNode:
     def e_stop_callback(self, msg):
         if msg.trigger:
             self.is_emergency_stop = True
+            rospy.logwarn("Emergency stop triggered - initiating shutdown sequence")
+            
+            # Stop the motor immediately
             self.emergency_stop_motor()
+            
+            # Update calibration state if needed
             if self.calibration_state == CalibrationState.START_CALIBRATION:
                 self.calibration_state = CalibrationState.FAILED
-                self.reset_calibration()
+            
+            # Perform clean shutdown
+            self.perform_emergency_shutdown()
+            
+            # Signal ROS to shutdown this node
+            rospy.signal_shutdown("Emergency stop triggered")
         else:
             self.is_emergency_stop = False
 
@@ -361,6 +371,35 @@ class SingleMotorControlNode:
                                          max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
         rospy.logwarn("Emergency stop triggered for motor.")
 
+    def perform_emergency_shutdown(self):
+        """Perform complete emergency shutdown sequence"""
+        rospy.logwarn("Performing emergency shutdown sequence...")
+        
+        try:
+            if self.can_channel and self.motor_controller:
+                # Flush CAN buffer before exiting
+                rospy.loginfo("Flushing CAN buffer...")
+                motor_driver.flush_can_buffer(self.can_channel, 0.2)
+                
+                # Exit MIT mode
+                rospy.loginfo("Exiting MIT mode...")
+                motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
+                time.sleep(0.1)
+                
+                # Read final status
+                motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
+                                             max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                
+                # Close CAN channel
+                rospy.loginfo("Closing CAN channel...")
+                self.can_channel.shutdown()
+                self.can_channel = None
+                
+            rospy.logwarn("Emergency shutdown sequence completed")
+            
+        except Exception as e:
+            rospy.logerr(f"Error during emergency shutdown: {e}")
+
     def read_motor_state(self):
         with self.motor_lock:
             if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
@@ -374,8 +413,9 @@ class SingleMotorControlNode:
                 rospy.logwarn_throttle(1.0, "Failed to read motor status")
 
     def send_motor_command(self):
-        if not self.motor_config.is_calibrated or self.is_emergency_stop:
-            rospy.logerr("Calibration aborted due to emergency stop")
+        if not self.motor_config.is_calibrated:
+            return False
+        if self.is_emergency_stop:
             return False
 
         with self.motor_lock:
@@ -412,6 +452,11 @@ class SingleMotorControlNode:
     def run(self):
         rospy.loginfo("Starting single motor control loop...")
         while not rospy.is_shutdown():
+            # Exit immediately if emergency stop is triggered
+            if self.is_emergency_stop:
+                rospy.loginfo("Emergency stop active - exiting control loop")
+                break
+                
             # Handle calibration trigger
             if self.calibration_state == CalibrationState.START_CALIBRATION:
                 rospy.loginfo("Starting calibration process...")
@@ -429,23 +474,29 @@ class SingleMotorControlNode:
                 # self.read_motor_state()
                 self.send_motor_command()
             
-            # Always publish status
-            self.publish_motor_status()
+            # Always publish status (unless emergency stopped)
+            if not self.is_emergency_stop:
+                self.publish_motor_status()
             self.rate.sleep()
 
     def shutdown(self):
         rospy.loginfo("Shutting down single motor control node...")
-        self.emergency_stop_motor()
-        if self.can_channel and self.motor_controller:
-            # Flush buffer before exiting
-            motor_driver.flush_can_buffer(self.can_channel, 0.2)
-            motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
-            time.sleep(0.1)
-            # Read response after exiting mode
-            motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
-        if self.can_channel:
-            self.can_channel.shutdown()
+        
+        # Only perform shutdown if emergency shutdown hasn't already been done
+        if not self.is_emergency_stop:
+            self.emergency_stop_motor()
+            if self.can_channel and self.motor_controller:
+                # Flush buffer before exiting
+                motor_driver.flush_can_buffer(self.can_channel, 0.2)
+                motor_driver.exit_mode(self.can_channel, self.motor_controller.controller_id)
+                time.sleep(0.1)
+                # Read response after exiting mode
+                motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
+                                             max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+            if self.can_channel:
+                self.can_channel.shutdown()
+        else:
+            rospy.loginfo("Emergency shutdown already performed - skipping redundant shutdown")
 
 if __name__ == '__main__':
     try:

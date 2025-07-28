@@ -40,10 +40,10 @@
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
   </node>
 
-  <!-- Dummy Crutches Node for manual input -->
+  <!-- Dummy Crutches Node for manual input in separate terminal
   <node name="dummy_crutches_node" pkg="exoskeleton_control" type="dummy_crutches_node.py" output="screen" launch-prefix="xterm -e">
     <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
     <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
   </node>
-
+   -->
 </launch>

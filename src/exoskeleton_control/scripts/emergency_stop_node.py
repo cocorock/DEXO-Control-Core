@@ -264,6 +264,16 @@ class EmergencyStopNode:
 
                 
                 self.e_stop_trigger_pub.publish(e_stop_msg)
+                
+                # Schedule shutdown after a brief delay to ensure message is sent
+                def delayed_shutdown():
+                    rospy.sleep(0.5)  # Give time for message to be sent and processed
+                    rospy.logwarn("Emergency stop complete - shutting down emergency stop node")
+                    rospy.signal_shutdown("Emergency stop triggered")
+                
+                shutdown_thread = threading.Thread(target=delayed_shutdown)
+                shutdown_thread.daemon = True
+                shutdown_thread.start()
 
     def clear_emergency_stop(self, reason="Emergency cleared"):
         """Clear emergency stop condition."""
@@ -295,19 +305,32 @@ class EmergencyStopNode:
         except Exception as e:
             rospy.logerr(f"State machine execution error: {e}")
 
+    def shutdown(self):
+        """Cleanup method called on node shutdown."""
+        rospy.loginfo("Shutting down Emergency Stop Node...")
+        
+        # Stop monitoring timer
+        if hasattr(self, 'monitor_timer'):
+            self.monitor_timer.shutdown()
+        
+        # Cleanup SMACH introspection
+        if hasattr(self, 'sis'):
+            self.sis.stop()
+            
+        rospy.loginfo("Emergency Stop Node shutdown complete")
+
     def run(self):
         """Main execution method."""
         rospy.loginfo("Starting Emergency Stop Node...")
+        
+        # Register shutdown handler
+        rospy.on_shutdown(self.shutdown)
         
         # Start state machine
         self.sm_thread.start()
         
         # Keep node alive
         rospy.spin()
-        
-        # Cleanup
-        if hasattr(self, 'sis'):
-            self.sis.stop()
 
 # SMACH State Definitions
 class InitState(smach.State):
