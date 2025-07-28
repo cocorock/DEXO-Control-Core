@@ -249,6 +249,37 @@ class SingleMotorControlNode:
                     # Always read response after sending command
                     if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
                                                     max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag):
+                        # Check if motor position exceeds configured angle limits in the direction of movement
+                        limit_exceeded = False
+                        if direction > 0 and self.motor_state.p_out > self.motor_config.max_angle_rad:
+                            rospy.logwarn(f"    Motor position {self.motor_state.p_out:.3f} rad exceeds max limit "
+                                         f"{self.motor_config.max_angle_rad:.3f} rad in positive direction")
+                            limit_exceeded = True
+                        elif direction < 0 and self.motor_state.p_out < self.motor_config.min_angle_rad:
+                            rospy.logwarn(f"    Motor position {self.motor_state.p_out:.3f} rad exceeds min limit "
+                                         f"{self.motor_config.min_angle_rad:.3f} rad in negative direction")
+                            limit_exceeded = True
+                        
+                        if limit_exceeded:
+                            # Add the configured angle limit as a valid calibration limit
+                            if direction > 0:
+                                limits.append(self.motor_config.max_angle_rad)
+                                rospy.loginfo(f"    Configured max angle limit reached at {self.motor_config.max_angle_rad:.3f} rad")
+                            else:
+                                limits.append(self.motor_config.min_angle_rad)
+                                rospy.loginfo(f"    Configured min angle limit reached at {self.motor_config.min_angle_rad:.3f} rad")
+                            
+                            # Stop motion immediately when angle limit is reached
+                            self.motor_state.v_in = 0.0
+                            self.motor_state.kp_in = 0.0  # Zero kp when position is not used
+                            motor_driver.pack_cmd(self.can_channel, self.motor_controller, self.motor_state, debug_flag=self.debug_flag)
+                            time.sleep(0.1)
+                            # Read response after stopping
+                            motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
+                                                          max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+                            time.sleep(0.2)
+                            break
+                        
                         if abs(self.motor_state.t_out) > self.torque_threshold:
                             limits.append(self.motor_state.p_out)
                             rospy.loginfo(f"    Limit found at {self.motor_state.p_out:.3f} rad")
@@ -263,6 +294,7 @@ class SingleMotorControlNode:
                                                           max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
                             time.sleep(0.2)
                             break
+
                 else:
                     rospy.logerr("Calibration timeout - limit not found")
                     return False
@@ -292,7 +324,7 @@ class SingleMotorControlNode:
             # Read response after moving to center
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
                                          max_attempts=3, timeout_ms=100, debug_flag=self.debug_flag)
-            time.sleep(1.0)
+            time.sleep(2.0)
             
             rospy.loginfo("Calibration completed successfully!")
             return True
@@ -358,7 +390,7 @@ class SingleMotorControlNode:
             
             # Send command
             motor_driver.pack_cmd(self.can_channel, self.motor_controller, self.motor_state, debug_flag=self.debug_flag)
-            time.sleep(0.01)  # Brief delay for motor response
+            time.sleep(0.001)  # Brief delay for motor response
             
             # Always read response after sending command to clear buffer
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
