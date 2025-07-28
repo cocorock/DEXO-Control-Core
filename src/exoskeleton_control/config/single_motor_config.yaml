@@ -1,7 +1,7 @@
 # Configuration for the single motor control node
 
 # Calibration Parameters
-torque_threshold: 8.0       # Nm
+torque_threshold: 1.0       # Nm
 calibration_speed_deg: 30.0 # degrees/s
 max_calibration_time: 30.0  # seconds
 
@@ -9,7 +9,7 @@ max_calibration_time: 30.0  # seconds
 gains:
   calibration:
     kp: 5.0
-    kd: 1.0
+    kd: 5.0
   trajectory:
     kp: 10.0
     kd: 2.0

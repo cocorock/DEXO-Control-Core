@@ -217,8 +217,8 @@ def safe_zero_position(bus, motor_controller: MotorController, motor_state: Moto
     read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
     # Step 4: Wait 3 seconds
-    print("  4. Waiting 3 seconds...")
-    time.sleep(3.0)
+    print("  4. Waiting 2 seconds...")
+    time.sleep(2.0)
     
     # Step 5: Re-enter MIT mode
     print("  5. Re-entering MIT mode...")
