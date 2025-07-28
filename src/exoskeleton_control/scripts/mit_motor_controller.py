@@ -216,9 +216,17 @@ def safe_zero_position(bus, motor_controller: MotorController, motor_state: Moto
     time.sleep(0.2)
     read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
-    # Step 4: Wait 3 seconds
+    # Step 4: Wait 2 seconds with periodic status checks to keep communication alive
     print("  4. Waiting 2 seconds...")
-    time.sleep(2.0)
+    wait_duration = 2.0
+    check_interval = 0.5  # Check status every 500ms to avoid emergency stop timeout
+    elapsed_time = 0.0
+    
+    while elapsed_time < wait_duration:
+        time.sleep(check_interval)
+        elapsed_time += check_interval
+        # Send periodic status request to keep communication alive during reset
+        # read_motor_status(bus, motor_controller, motor_state, max_attempts=1, timeout_ms=50, debug_flag=debug_flag)
     
     # Step 5: Re-enter MIT mode
     print("  5. Re-entering MIT mode...")

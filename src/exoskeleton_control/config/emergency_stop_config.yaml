@@ -3,7 +3,7 @@
 
 # Monitoring Parameters
 monitor_frequency: 10.0        # Hz - How often to check system health
-communication_timeout: 2.0     # seconds - Max time without motor status updates
+communication_timeout: 5.0     # seconds - Max time without motor status updates (increased for calibration)
 
 # Safety Thresholds
 safety:

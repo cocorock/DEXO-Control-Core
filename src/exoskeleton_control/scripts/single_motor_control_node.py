@@ -76,7 +76,7 @@ class SingleMotorControlNode:
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
         rospy.Subscriber('calibration_trigger_fw', CalibrationTriggerFw, self.calibration_trigger_callback)
 
-        self.motor_status_pub = rospy.Publisher('MotorStatus', MotorStatus, queue_size=1)
+        self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
 
         self.rate = rospy.Rate(self.control_frequency)
 
@@ -171,8 +171,8 @@ class SingleMotorControlNode:
         min_angle = math.radians(-30)
         max_angle = math.radians(30)
         # Create a path from min to max and back to min
-        forward_path = np.linspace(min_angle, max_angle, 100)
-        backward_path = np.linspace(max_angle, min_angle, 100)
+        forward_path = np.linspace(min_angle, max_angle, 15)
+        backward_path = np.linspace(max_angle, min_angle, 15)
         self.trajectory = np.concatenate((forward_path, backward_path))
         rospy.loginfo(f"Generated trajectory with {len(self.trajectory)} points.")
 
@@ -341,7 +341,8 @@ class SingleMotorControlNode:
 
     def send_motor_command(self):
         if not self.motor_config.is_calibrated or self.is_emergency_stop:
-            return
+            rospy.logerr("Calibration aborted due to emergency stop")
+            return False
 
         with self.motor_lock:
             self.desired_position = self.trajectory[self.trajectory_index]

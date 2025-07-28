@@ -40,7 +40,7 @@ class EmergencyStopNode:
         self.state_lock = threading.Lock()
         
         # Subscribers
-        rospy.Subscriber('MotorStatus', MotorStatus, self.motor_status_callback)
+        rospy.Subscriber('Motor_Status', MotorStatus, self.motor_status_callback)
         rospy.Subscriber('stop_trigger', StopTrigger, self.stop_trigger_callback)
         rospy.Subscriber('manual_calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
         
@@ -242,8 +242,8 @@ class EmergencyStopNode:
         """Periodic monitoring for communication timeouts and system health."""
         current_time = rospy.Time.now()
         
-        # Check communication timeout
-        if self.stop_on_communication_loss:
+        # Check communication timeout (skip during calibration)
+        if self.stop_on_communication_loss and self.current_state != SystemStates.CALIBRATING:
             time_since_update = (current_time - self.last_motor_update).to_sec()
             if time_since_update > self.communication_timeout:
                 rospy.logwarn(f"Motor communication timeout: {time_since_update:.1f}s")
@@ -261,7 +261,7 @@ class EmergencyStopNode:
                 e_stop_msg.header.stamp = rospy.Time.now()
                 e_stop_msg.trigger = True
                 e_stop_msg.state = self.current_state
-                e_stop_msg.reason = reason
+
                 
                 self.e_stop_trigger_pub.publish(e_stop_msg)
 
@@ -277,7 +277,6 @@ class EmergencyStopNode:
                 e_stop_msg.header.stamp = rospy.Time.now()
                 e_stop_msg.trigger = False
                 e_stop_msg.state = self.current_state
-                e_stop_msg.reason = reason
                 
                 self.e_stop_trigger_pub.publish(e_stop_msg)
 

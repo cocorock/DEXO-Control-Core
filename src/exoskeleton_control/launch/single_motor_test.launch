@@ -10,22 +10,20 @@
 
   <!-- Single Motor Control Node -->
   <node name="single_motor_control_node" pkg="exoskeleton_control" type="single_motor_control_node.py" output="screen">
-    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
-    <!-- Receives forward calibration triggers from emergency_stop -->
-    <remap from="calibration_trigger_fw" to="/calibration_trigger_fw"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
   </node>
 
   <!-- Emergency Stop Node -->
   <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
-    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
-    <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
-    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
-    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
-    <!-- Receives manual calibration triggers from dummy_crutches -->
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
+    <remap from="stop_trigger" to="stop_trigger"/>
     <remap from="manual_calibration_trigger" to="/manual_calibration_trigger"/>
-    <!-- Publishes forward calibration triggers to motor control -->
-    <remap from="calibration_trigger_fw" to="/calibration_trigger_fw"/>
+    <!-- Missing Exoskeleton_State -->
+    <remap from="Exoskeleton_State" to="/exoskeleton/state"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
   </node>
 
   
