@@ -18,18 +18,19 @@
   <node name="motor_control_node" pkg="exoskeleton_control" type="motor_control_node.py" output="screen">
     <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
     <remap from="ExoskeletonState" to="/exoskeleton/state"/>
-    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
     <remap from="Torques" to="/exoskeleton/torques"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
-    <remap from="calibration_trigger" to="/exoskeleton/calibration"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration"/>
   </node>
 
   <!-- Emergency Stop Node -->
   <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
-    <remap from="MotorStatus" to="/exoskeleton/motor_status"/>
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
     <remap from="stop_trigger" to="/exoskeleton/stop_trigger"/>
     <remap from="ExoskeletonState" to="/exoskeleton/state"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration"/>
   </node>
 
   <!-- Trajectory Generator Node -->

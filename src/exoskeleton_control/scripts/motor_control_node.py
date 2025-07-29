@@ -6,7 +6,7 @@ import threading
 import time
 import math
 from enum import Enum
-from exoskeleton_control.msg import JointsTrajectory, ExoskeletonState, MotorStatus, Torques, EStopTrigger, CalibrationTrigger
+from exoskeleton_control.msg import JointsTrajectory, ExoskeletonState, MotorStatus, Torques, EStopTrigger, Trigger
 import mit_motor_controller as motor_driver
 import can
 
@@ -229,14 +229,17 @@ class MotorControlNode:
             rospy.signal_shutdown("Failed to initialize motors")
             return
 
+        # Debug flag for motor driver functions
+        self.debug_flag = False
+
         # Subscribers
         rospy.Subscriber('joints_trajectory', JointsTrajectory, self.joints_trajectory_callback)
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
-        rospy.Subscriber('calibration_trigger', CalibrationTrigger, self.calibration_trigger_callback)
+        rospy.Subscriber('calibration_trigger_fw', Trigger, self.calibration_trigger_callback)
 
         # Publishers
         self.exoskeleton_state_pub = rospy.Publisher('ExoskeletonState', ExoskeletonState, queue_size=1)
-        self.motor_status_pub = rospy.Publisher('MotorStatus', MotorStatus, queue_size=1)
+        self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
         self.torques_pub = rospy.Publisher('Torques', Torques, queue_size=1)
 
         self.rate = rospy.Rate(self.control_frequency)
@@ -455,30 +458,40 @@ class MotorControlNode:
 
     def e_stop_callback(self, msg):
         """Handle emergency stop."""
-        rospy.loginfo(f"Received e_stop_trigger: {msg.trigger}, state: {msg.state}")
         if msg.trigger:
             self.is_emergency_stop = True
-            self.trajectory_active = False
-            # Send zero torque commands to all motors
+            rospy.logwarn("Emergency stop triggered - initiating shutdown sequence")
+            
+            # Stop all motors immediately
             self.emergency_stop_motors()
             
-            # If calibration was in progress, reset to failed state
+            # Update calibration state if needed
             if self.calibration_state not in [CalibrationState.NOT_STARTED, CalibrationState.COMPLETED]:
-                rospy.logwarn("Emergency stop during calibration - resetting to init state")
-                self.reset_calibration()
+                rospy.logwarn("Emergency stop during calibration - resetting to failed state")
+                self.calibration_state = CalibrationState.FAILED
+            
+            # Perform clean shutdown
+            self.perform_emergency_shutdown()
+            
+            # Signal ROS to shutdown this node
+            rospy.signal_shutdown("Emergency stop triggered")
         else:
             self.is_emergency_stop = False
 
     def calibration_trigger_callback(self, msg):
         """Handle calibration trigger."""
+        rospy.loginfo("Calibration trigger received")
         if msg.trigger and self.calibration_state == CalibrationState.NOT_STARTED:
-            rospy.loginfo("Starting motor calibration...")
+            rospy.loginfo("Calibration trigger accepted - will start calibration")
             self.start_calibration()
+            self.calibration_state = CalibrationState.CALIBRATING_R_HIP
+        elif msg.trigger:
+            rospy.logwarn(f"Calibration trigger ignored - current state: {self.calibration_state.value}")
 
     def start_calibration(self):
         """Start the calibration process."""
         try:
-            self.calibration_state = CalibrationState.CALIBRATING_R_HIP
+            rospy.loginfo("Starting motor calibration sequence...")
             self.current_calibration_motor = 0
             
             # Reset all motor calibration flags
@@ -489,10 +502,18 @@ class MotorControlNode:
             self.ff_calc_right.reset_estimator()
             self.ff_calc_left.reset_estimator()
             
+            # Flush buffer before starting calibration
+            motor_driver.flush_can_buffer(self.can_channel, 0.2)
+            
             # Enter MIT mode for all motors
             for motor_id, controller in self.motor_controllers.items():
-                motor_driver.enter_mode(self.can_channel, controller.controller_id)
+                if not motor_driver.enter_mode(self.can_channel, controller.controller_id):
+                    rospy.logerr(f"Failed to enter MIT mode for motor {motor_id}")
+                    raise Exception(f"Failed to enter MIT mode for motor {motor_id}")
                 time.sleep(0.1)
+                # Read response after entering mode
+                motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
+                                             max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
                 
             rospy.loginfo("All motors entered MIT mode. Starting calibration sequence...")
 
@@ -509,9 +530,11 @@ class MotorControlNode:
             state = self.motor_states[motor_id]
             config = self.motor_configs[motor_id]
             
-            # Zero the current position
-            motor_driver.zero_position(self.can_channel, controller.controller_id)
-            time.sleep(0.2)
+            # Safe zero position procedure
+            rospy.loginfo(f"  Setting safe zero position for motor {motor_id}...")
+            if not motor_driver.safe_zero_position(self.can_channel, controller, state, debug_flag=self.debug_flag):
+                rospy.logerr(f"Failed to safely zero position for motor {motor_id}")
+                return False
             
             limits = []
             calibration_start_time = time.time()
@@ -541,14 +564,15 @@ class MotorControlNode:
                         return False
                     
                     # Send movement command
-                    if not motor_driver.pack_cmd(self.can_channel, controller, state):
+                    if not motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag):
                         rospy.logerr(f"Failed to send calibration command to motor {motor_id}")
                         return False
                     
                     time.sleep(0.01)  # 10ms delay
                     
                     # Read motor status
-                    if motor_driver.read_motor_status(self.can_channel, controller, state):
+                    if motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                    max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag):
                         # Check if torque exceeds threshold (stopper detected)
                         if abs(state.t_out) > self.torque_threshold:
                             limits.append(state.p_out)
@@ -556,7 +580,12 @@ class MotorControlNode:
                             
                             # Stop the motor
                             state.v_in = 0.0
-                            motor_driver.pack_cmd(self.can_channel, controller, state)
+                            state.kp_in = 0.0  # Zero kp when position is not used
+                            motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
+                            time.sleep(0.1)
+                            # Read response after stopping
+                            motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
                             time.sleep(0.2)
                             break
                     else:
@@ -580,7 +609,11 @@ class MotorControlNode:
             state.kd_in = self.gains['trajectory']['kd']
             state.t_in = 0.0
             
-            motor_driver.pack_cmd(self.can_channel, controller, state)
+            motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
+            time.sleep(0.1)
+            # Read response after moving to center
+            motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                         max_attempts=3, timeout_ms=100, debug_flag=self.debug_flag)
             time.sleep(1.0)  # Allow time to reach center
             
             rospy.loginfo(f"Motor {motor_id} calibrated successfully:")
@@ -648,9 +681,15 @@ class MotorControlNode:
         
         # Exit MIT mode for all motors
         try:
+            # Flush buffer before exiting
+            motor_driver.flush_can_buffer(self.can_channel, 0.2)
+            
             for motor_id, controller in self.motor_controllers.items():
                 motor_driver.exit_mode(self.can_channel, controller.controller_id)
                 time.sleep(0.1)
+                # Read response after exiting mode
+                motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
+                                             max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
         except Exception as e:
             rospy.logerr(f"Error exiting MIT mode during reset: {e}")
 
@@ -666,10 +705,44 @@ class MotorControlNode:
                     state.kd_in = 5.0  # High damping only
                     state.t_in = 0.0   # Zero torque
                     
-                    motor_driver.pack_cmd(self.can_channel, controller, state)
+                    motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
+                    time.sleep(0.01)
+                    # Read response after emergency stop command
+                    motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                 max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+            rospy.logwarn("Emergency stop triggered for all motors.")
 
         except Exception as e:
             rospy.logerr(f"Emergency stop error: {e}")
+
+    def perform_emergency_shutdown(self):
+        """Perform complete emergency shutdown sequence"""
+        rospy.logwarn("Performing emergency shutdown sequence...")
+        
+        try:
+            if self.can_channel and self.motor_controllers:
+                # Flush CAN buffer before exiting
+                rospy.loginfo("Flushing CAN buffer...")
+                motor_driver.flush_can_buffer(self.can_channel, 0.2)
+                
+                # Exit MIT mode for all motors
+                rospy.loginfo("Exiting MIT mode for all motors...")
+                for motor_id, controller in self.motor_controllers.items():
+                    motor_driver.exit_mode(self.can_channel, controller.controller_id)
+                    time.sleep(0.1)
+                    # Read final status
+                    motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
+                                                 max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                
+                # Close CAN channel
+                rospy.loginfo("Closing CAN channel...")
+                self.can_channel.shutdown()
+                self.can_channel = None
+                
+            rospy.logwarn("Emergency shutdown sequence completed")
+            
+        except Exception as e:
+            rospy.logerr(f"Error during emergency shutdown: {e}")
 
     def read_motor_states(self):
         """Read current state from all motors synchronously."""
@@ -679,7 +752,8 @@ class MotorControlNode:
                     controller = self.motor_controllers[motor_id]
                     state = self.motor_states[motor_id]
                     
-                    if motor_driver.read_motor_status(self.can_channel, controller, state):
+                    if motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                     max_attempts=2, timeout_ms=100, debug_flag=self.debug_flag):
                         self.motor_positions[i] = state.p_out
                         self.motor_velocities[i] = state.v_out
                         self.motor_torques[i] = state.t_out
@@ -745,7 +819,7 @@ class MotorControlNode:
                         state.kd_in = self.gains['trajectory']['kd']
                         state.t_in = self.feedforward_torques[i] * config.direction  # Apply direction to torque
                         
-                        motor_driver.pack_cmd(self.can_channel, controller, state)
+                        motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
                     else:
                         # Send zero torque if no active trajectory
                         state.p_in = state.p_out  # Hold current position
@@ -754,7 +828,7 @@ class MotorControlNode:
                         state.kd_in = self.gains['hold']['kd']
                         state.t_in = 0.0
                         
-                        motor_driver.pack_cmd(self.can_channel, controller, state)
+                        motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
 
         except Exception as e:
             rospy.logerr(f"Error sending motor commands: {e}")
@@ -823,6 +897,10 @@ class MotorControlNode:
         rospy.loginfo("Starting motor control loop...")
 
         while not rospy.is_shutdown():
+            # Exit immediately if emergency stop is triggered
+            if self.is_emergency_stop:
+                rospy.loginfo("Emergency stop active - exiting control loop")
+                break
             loop_start_time = time.time()
 
             try:
@@ -861,21 +939,28 @@ class MotorControlNode:
     def shutdown(self):
         """Clean shutdown of motors."""
         rospy.loginfo("Shutting down motor control node...")
+        
+        # Only perform shutdown if emergency shutdown hasn't already been done
+        if not self.is_emergency_stop:
+            # Send zero torque to all motors
+            self.emergency_stop_motors()
 
-        # Send zero torque to all motors
-        self.emergency_stop_motors()
+            # Exit MIT mode for all motors
+            try:
+                for motor_id, controller in self.motor_controllers.items():
+                    motor_driver.exit_mode(self.can_channel, controller.controller_id)
+                    time.sleep(0.1)
+                    # Read response after exiting mode
+                    motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
+                                                 max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+            except Exception as e:
+                rospy.logerr(f"Error during shutdown: {e}")
 
-        # Exit MIT mode for all motors
-        try:
-            for motor_id, controller in self.motor_controllers.items():
-                motor_driver.exit_mode(self.can_channel, controller.controller_id)
-                time.sleep(0.1)
-        except Exception as e:
-            rospy.logerr(f"Error during shutdown: {e}")
-
-        # Close CAN interface
-        if self.can_channel:
-            self.can_channel.shutdown()
+            # Close CAN interface
+            if self.can_channel:
+                self.can_channel.shutdown()
+        else:
+            rospy.loginfo("Emergency shutdown already performed - skipping redundant shutdown")
         
         rospy.loginfo("Motor control node shutdown complete")
 
