@@ -10,7 +10,7 @@
     
     <!-- Override specific parameters if needed -->
     <param name="control_frequency" value="15"/>
-    <param name="trajectory_file" value="$(find exoskeleton_control)/data/new_processed_gait_data#39_1_json_structure_1.json"/>
+    <param name="trajectory_file" value="gait_data_39_1.json"/>
     
     <!-- Remap topics if needed -->
     <remap from="gait_params" to="/exoskeleton/gait_params"/>

@@ -572,7 +572,7 @@ class MotorControlNode:
                     
                     # Read motor status
                     if motor_driver.read_motor_status(self.can_channel, controller, state, 
-                                                    max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag):
+                                                    max_attempts=3, timeout_ms=10, debug_flag=self.debug_flag):
                         # Check if torque exceeds threshold (stopper detected)
                         if abs(state.t_out) > self.torque_threshold:
                             limits.append(state.p_out)
@@ -744,26 +744,12 @@ class MotorControlNode:
         except Exception as e:
             rospy.logerr(f"Error during emergency shutdown: {e}")
 
-    def read_motor_states(self):
-        """Read current state from all motors synchronously."""
-        try:
-            with self.motor_lock:
-                for i, motor_id in enumerate([1, 2, 3, 4]):
-                    controller = self.motor_controllers[motor_id]
-                    state = self.motor_states[motor_id]
-                    
-                    if motor_driver.read_motor_status(self.can_channel, controller, state, 
-                                                     max_attempts=2, timeout_ms=100, debug_flag=self.debug_flag):
-                        self.motor_positions[i] = state.p_out
-                        self.motor_velocities[i] = state.v_out
-                        self.motor_torques[i] = state.t_out
-                        self.motor_temperatures[i] = state.temperature
-                        self.motor_error_flags[i] = state.error_flag
-                    else:
-                        rospy.logwarn_throttle(1.0, f"Failed to read motor {motor_id} status")
-
-        except Exception as e:
-            rospy.logerr(f"Error reading motor states: {e}")
+    def update_motor_states(self):
+        """Motor state values are now updated directly in send_motor_commands() after each pack_cmd().
+        This function is kept for compatibility but no longer performs redundant CAN reads."""
+        # Motor state values are updated directly in send_motor_commands() for efficiency
+        # No additional CAN communication needed here
+        pass
 
     def calculate_feedforward_torques(self):
         """Calculate feedforward torques for both legs."""
@@ -820,6 +806,18 @@ class MotorControlNode:
                         state.t_in = self.feedforward_torques[i] * config.direction  # Apply direction to torque
                         
                         motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
+                        time.sleep(0.001)  # Brief delay for motor response
+                        # Always read response after sending command and update motor state values
+                        if motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                        max_attempts=3, timeout_ms=1, debug_flag=self.debug_flag):
+                            # Update motor state values directly after reading response
+                            self.motor_positions[i] = state.p_out
+                            self.motor_velocities[i] = state.v_out
+                            self.motor_torques[i] = state.t_out
+                            self.motor_temperatures[i] = state.temperature
+                            self.motor_error_flags[i] = state.error_flag
+                        else:
+                            rospy.logwarn_throttle(1.0, f"Failed to read response from motor {motor_id} after trajectory command")
                     else:
                         # Send zero torque if no active trajectory
                         state.p_in = state.p_out  # Hold current position
@@ -829,6 +827,18 @@ class MotorControlNode:
                         state.t_in = 0.0
                         
                         motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
+                        time.sleep(0.001)  # Brief delay for motor response
+                        # Always read response after sending command and update motor state values
+                        if motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                                        max_attempts=3, timeout_ms=1, debug_flag=self.debug_flag):
+                            # Update motor state values directly after reading response
+                            self.motor_positions[i] = state.p_out
+                            self.motor_velocities[i] = state.v_out
+                            self.motor_torques[i] = state.t_out
+                            self.motor_temperatures[i] = state.temperature
+                            self.motor_error_flags[i] = state.error_flag
+                        else:
+                            rospy.logwarn_throttle(1.0, f"Failed to read response from motor {motor_id} after hold command")
 
         except Exception as e:
             rospy.logerr(f"Error sending motor commands: {e}")
@@ -839,21 +849,21 @@ class MotorControlNode:
             msg = ExoskeletonState()
             msg.header.stamp = rospy.Time.now()
             
-            # Right leg data
-            msg.right_leg.positions = [self.motor_positions[0], self.motor_positions[1]]
-            msg.right_leg.velocities = [self.motor_velocities[0], self.motor_velocities[1]]
-            msg.right_leg.torques = [self.motor_torques[0], self.motor_torques[1]]
+            # Right leg data (motors 0, 1: hip, knee)
+            msg.Rhip_pos_st = self.motor_positions[0]
+            msg.Rknee_pos_st = self.motor_positions[1]
+            msg.Rhip_vel_st = self.motor_velocities[0]
+            msg.Rknee_vel_st = self.motor_velocities[1]
+            msg.Rhip_tau_st = self.motor_torques[0]
+            msg.Rknee_tau_st = self.motor_torques[1]
             
-            # Left leg data
-            msg.left_leg.positions = [self.motor_positions[2], self.motor_positions[3]]
-            msg.left_leg.velocities = [self.motor_velocities[2], self.motor_velocities[3]]
-            msg.left_leg.torques = [self.motor_torques[2], self.motor_torques[3]]
-            
-            # System state
-            msg.is_calibrated = (self.calibration_state == CalibrationState.COMPLETED)
-            msg.calibration_state = self.calibration_state.value
-            msg.is_emergency_stop = self.is_emergency_stop
-            msg.trajectory_active = self.trajectory_active
+            # Left leg data (motors 2, 3: hip, knee)
+            msg.Lhip_pos_st = self.motor_positions[2]
+            msg.Lknee_pos_st = self.motor_positions[3]
+            msg.Lhip_vel_st = self.motor_velocities[2]
+            msg.Lknee_vel_st = self.motor_velocities[3]
+            msg.Lhip_tau_st = self.motor_torques[2]
+            msg.Lknee_tau_st = self.motor_torques[3]
 
             self.exoskeleton_state_pub.publish(msg)
 
@@ -884,8 +894,10 @@ class MotorControlNode:
         try:
             msg = Torques()
             msg.header.stamp = rospy.Time.now()
-            msg.feedforward_torques = self.feedforward_torques.tolist()
-            msg.motor_torques = self.motor_torques.tolist()
+            # Combine feedforward and motor torques into single array
+            # Format: [R_hip_ff, R_knee_ff, L_hip_ff, L_knee_ff, R_hip_motor, R_knee_motor, L_hip_motor, L_knee_motor]
+            combined_torques = list(self.feedforward_torques) + list(self.motor_torques)
+            msg.torques = combined_torques
 
             self.torques_pub.publish(msg)
 
@@ -912,14 +924,14 @@ class MotorControlNode:
 
                 # Normal operation
                 if self.calibration_state == CalibrationState.COMPLETED:
-                    # Step 1: Read motor states (should take ~444μs for 4 motors)
-                    self.read_motor_states()
-
-                    # Step 2: Calculate feedforward torques (designed for <8ms)
+                    # Step 1: Calculate feedforward torques (designed for <8ms)
                     self.calculate_feedforward_torques()
 
-                    # Step 3: Send motor commands (should take ~444μs for 4 motors)
+                    # Step 2: Send motor commands (should take ~444μs for 4 motors)
                     self.send_motor_commands()
+
+                    #Step 3: Update motors status
+                    # self.update_motor_states()
 
                 # Step 4: Publish topics
                 self.publish_exoskeleton_state()
@@ -952,7 +964,7 @@ class MotorControlNode:
                     time.sleep(0.1)
                     # Read response after exiting mode
                     motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
-                                                 max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+                                                 max_attempts=1, timeout_ms=10, debug_flag=self.debug_flag)
             except Exception as e:
                 rospy.logerr(f"Error during shutdown: {e}")
 

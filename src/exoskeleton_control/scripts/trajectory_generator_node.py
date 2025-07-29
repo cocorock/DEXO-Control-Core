@@ -64,8 +64,8 @@ class TrajectoryGeneratorNode:
             self.trajectory_scale = rospy.get_param('~trajectory_scale', 1.0)  # Scale factor for positions
             
             # Error codes
-            self.ERROR_UNREACHABLE = -5.0
-            self.ERROR_JOINT_LIMITS = -6.0
+            self.ERROR_UNREACHABLE = -333.0
+            self.ERROR_JOINT_LIMITS = -444.0
 
             rospy.loginfo("Trajectory generator configuration loaded successfully")
 
@@ -85,16 +85,22 @@ class TrajectoryGeneratorNode:
         self.trajectory_file = 'trajectory.json'
         self.loop_trajectory = True
         self.trajectory_scale = 1.0
-        self.ERROR_UNREACHABLE = -5.0
-        self.ERROR_JOINT_LIMITS = -6.0
+        self.ERROR_UNREACHABLE = -333.0
+        self.ERROR_JOINT_LIMITS = -444.0
 
     def load_trajectory_from_json(self):
         """Load trajectory data from JSON file based on the provided structure."""
         try:
+            # Get package path and resolve $(find) syntax
+            import rospkg
+            rospack = rospkg.RosPack()
+            package_path = rospack.get_path('exoskeleton_control')
+            data_path = os.path.join(package_path, 'data')
+            
             # Try to find the file in multiple locations
             possible_paths = [
                 self.trajectory_file,
-                os.path.join(rospy.get_param('~package_path', '.'), self.trajectory_file),
+                os.path.join(data_path, self.trajectory_file),
                 os.path.join('/tmp', self.trajectory_file),
                 os.path.expanduser(f'~/{self.trajectory_file}')
             ]
@@ -173,7 +179,7 @@ class TrajectoryGeneratorNode:
                     
                     # Skip points that result in errors
                     if theta_hip < -4.0 or theta_knee < -4.0:  # Error codes
-                        rospy.logwarn(f"Skipping unreachable point {i}: ankle=({ankle_x:.3f}, {ankle_y:.3f})")
+                        rospy.logwarn(f"Skipping unreachable point {i}: ankle=({ankle_x:.3f}, {ankle_y:.3f}, Joints: hip={theta_hip}, knee={theta_knee})")
                         continue
                     
                     # Calculate joint velocities using Jacobian
@@ -213,65 +219,147 @@ class TrajectoryGeneratorNode:
 
     def calculate_forward_kinematics(self, theta_hip, theta_knee):
         """
-        Calculate forward kinematics for 2-link planar arm
+        Calculate forward kinematics for 2-link planar leg
         Args:
-            theta_hip: Hip joint angle (rad)
-            theta_knee: Knee joint angle (rad)
+            theta_hip: Hip joint angle (rad) - zero when pointing downward
+            theta_knee: Knee joint angle (rad) - zero when straight, negative for flexion
         Returns:
             x, y: Ankle position relative to hip
         """
-        # Forward kinematics equations for 2-link arm
-        # Assuming hip is at origin, positive x is forward, positive y is up
-        x = self.L1 * math.cos(theta_hip) + self.L2 * math.cos(theta_hip + theta_knee)
-        y = self.L1 * math.sin(theta_hip) + self.L2 * math.sin(theta_hip + theta_knee)
+        # Convert joint angles to geometric angles
+        theta_hip_geom = theta_hip - math.pi/2  # Hip: subtract 90° offset
+        theta_knee_geom = theta_knee + math.pi   # Knee: add 180° offset
+        
+        # Forward kinematics equations for 2-link leg
+        # Hip at origin, x is forward/back, y is up/down
+        x = self.L1 * math.cos(theta_hip_geom) + self.L2 * math.cos(theta_hip_geom + theta_knee_geom)
+        y = self.L1 * math.sin(theta_hip_geom) + self.L2 * math.sin(theta_hip_geom + theta_knee_geom)
         
         return x, y
 
     def calculate_inverse_kinematics(self, x, y):
         """
-        Calculate inverse kinematics for 2-link planar arm (leg)
+        Calculate inverse kinematics for 2-link planar leg
         Args:
-            x, y: Target ankle position relative to hip
+            x, y: Target ankle position relative to hip (m)
+                  x: forward/backward (positive forward)
+                  y: up/down (positive up, negative down)
         Returns:
             theta_hip, theta_knee: Joint angles (rad)
+                     theta_hip: Hip angle (positive = flexion/forward)
+                     theta_knee: Knee angle (negative = flexion, 0 = straight)
         """
+        # DEBUG: Print input parameters
+        rospy.loginfo(f"[IK DEBUG] Input: x={x:.4f}m, y={y:.4f}m")
+        rospy.loginfo(f"[IK DEBUG] Link lengths: L1={self.L1:.4f}m, L2={self.L2:.4f}m")
+        rospy.loginfo(f"[IK DEBUG] Joint limits: hip=[{math.degrees(self.theta1_min):.1f}°, {math.degrees(self.theta1_max):.1f}°], knee=[{math.degrees(self.theta2_min):.1f}°, {math.degrees(self.theta2_max):.1f}°]")
+        
         # Calculate distance from hip to ankle
         distance = math.sqrt(x*x + y*y)
+        rospy.loginfo(f"[IK DEBUG] Distance to target: {distance:.4f}m")
         
         # Check if target is reachable
-        if distance > (self.L1 + self.L2):
-            rospy.logwarn(f"Target unreachable: distance={distance:.3f}, max_reach={self.L1 + self.L2:.3f}")
+        max_reach = self.L1 + self.L2
+        min_reach = abs(self.L1 - self.L2)
+        rospy.loginfo(f"[IK DEBUG] Reachability: min={min_reach:.4f}m, max={max_reach:.4f}m")
+        
+        if distance > max_reach:
+            rospy.logwarn(f"[IK DEBUG] Target unreachable: distance={distance:.3f}, max_reach={max_reach:.3f}")
             return self.ERROR_UNREACHABLE, self.ERROR_UNREACHABLE
         
-        if distance < abs(self.L1 - self.L2):
-            rospy.logwarn(f"Target too close: distance={distance:.3f}, min_reach={abs(self.L1 - self.L2):.3f}")
+        if distance < min_reach:
+            rospy.logwarn(f"[IK DEBUG] Target too close: distance={distance:.3f}, min_reach={min_reach:.3f}")
+            return self.ERROR_UNREACHABLE, self.ERROR_UNREACHABLE
+        
+        # Handle the case when target is at origin
+        if distance < 1e-6:
+            rospy.logwarn(f"[IK DEBUG] Target at origin")
             return self.ERROR_UNREACHABLE, self.ERROR_UNREACHABLE
         
         # Calculate knee angle using law of cosines
-        cos_theta2 = (distance*distance - self.L1*self.L1 - self.L2*self.L2) / (2 * self.L1 * self.L2)
+        # For 2-link chain: cos(theta_knee) = (L1² + L2² - distance²) / (2*L1*L2)
+        cos_theta_knee = (self.L1*self.L1 + self.L2*self.L2 - distance*distance) / (2 * self.L1 * self.L2)
+        rospy.loginfo(f"[IK DEBUG] cos_theta_knee (before clamp): {cos_theta_knee:.4f}")
         
-        # Clamp cos_theta2 to valid range to handle numerical errors
-        cos_theta2 = max(-1.0, min(1.0, cos_theta2))
+        # Clamp cos_theta_knee to valid range to handle numerical errors
+        cos_theta_knee = max(-1.0, min(1.0, cos_theta_knee))
+        rospy.loginfo(f"[IK DEBUG] cos_theta_knee (after clamp): {cos_theta_knee:.4f}")
         
-        # Choose elbow-down configuration (negative knee angle for leg)
-        theta_knee = -math.acos(cos_theta2)
+        # Calculate knee angle - geometric angle between links
+        theta_knee_geom = math.acos(cos_theta_knee)  # Geometric angle between links
         
-        # Calculate hip angle
-        alpha = math.atan2(y, x)  # Angle from hip to target
-        beta = math.acos((self.L1*self.L1 + distance*distance - self.L2*self.L2) / (2 * self.L1 * distance))
+        # Convert to joint angle: knee is zero when both links point downward (straight)
+        # When straight (both links aligned): geometric angle = 180°, joint angle = 0°
+        # When flexed: geometric angle < 180°, joint angle < 0° (negative flexion)
+        theta_knee = theta_knee_geom - math.pi  # Subtract 180° to shift reference
         
-        theta_hip = alpha - beta
+        rospy.loginfo(f"[IK DEBUG] theta_knee_geom: {math.degrees(theta_knee_geom):.2f}°")
+        rospy.loginfo(f"[IK DEBUG] theta_knee (joint angle): {math.degrees(theta_knee):.2f}°")
+        
+        # Calculate hip angle using geometric approach
+        # First find the angle from hip to target point
+        gamma = math.atan2(y, x)
+        rospy.loginfo(f"[IK DEBUG] gamma (angle to target): {math.degrees(gamma):.2f}°")
+        
+        # Then find the angle from hip to knee using law of cosines
+        cos_phi = (self.L1*self.L1 + distance*distance - self.L2*self.L2) / (2 * self.L1 * distance)
+        rospy.loginfo(f"[IK DEBUG] cos_phi (before clamp): {cos_phi:.4f}")
+        cos_phi = max(-1.0, min(1.0, cos_phi))  # Clamp to valid range
+        phi = math.acos(cos_phi)
+        rospy.loginfo(f"[IK DEBUG] phi (hip to knee angle): {math.degrees(phi):.2f}°")
+        
+        # Hip angle is the difference (for knee-down configuration)
+        theta_hip_raw = gamma - phi
+        
+        # Adjust for hip joint zero reference (zero when pointing downwards at -90°)
+        # Convert from geometric angle to joint angle
+        theta_hip = theta_hip_raw + math.pi/2  # Add 90° to shift reference
+        
+        rospy.loginfo(f"[IK DEBUG] theta_hip_raw: {math.degrees(theta_hip_raw):.2f}°")
+        rospy.loginfo(f"[IK DEBUG] theta_hip (after reference shift): {math.degrees(theta_hip):.2f}°")
         
         # Normalize angles to [-pi, pi]
         theta_hip = self.normalize_angle(theta_hip)
         theta_knee = self.normalize_angle(theta_knee)
+        rospy.loginfo(f"[IK DEBUG] After normalization: hip={math.degrees(theta_hip):.2f}°, knee={math.degrees(theta_knee):.2f}°")
         
         # Check joint limits
-        if (theta_hip < self.theta1_min or theta_hip > self.theta1_max or 
-            theta_knee < self.theta2_min or theta_knee > self.theta2_max):
-            rospy.logwarn_throttle(5.0, f"Joint limits exceeded: hip={math.degrees(theta_hip):.1f}° knee={math.degrees(theta_knee):.1f}°")
+        hip_in_limits = (theta_hip >= self.theta1_min and theta_hip <= self.theta1_max)
+        knee_in_limits = (theta_knee >= self.theta2_min and theta_knee <= self.theta2_max)
+        rospy.loginfo(f"[IK DEBUG] Limits check: hip_ok={hip_in_limits}, knee_ok={knee_in_limits}")
+        
+        if not hip_in_limits or not knee_in_limits:
+            rospy.loginfo(f"[IK DEBUG] Trying alternative configuration...")
+            
+            # Try alternative configuration (knee-up) if first fails
+            theta_knee_alt_geom = -math.acos(cos_theta_knee)  # Alternative geometric angle
+            theta_knee_alt = theta_knee_alt_geom - math.pi  # Convert to joint angle
+            theta_hip_alt_raw = gamma + phi
+            
+            # Apply same reference shift for alternative configuration
+            theta_hip_alt = theta_hip_alt_raw + math.pi/2  # Add 90° to shift reference
+            
+            theta_hip_alt = self.normalize_angle(theta_hip_alt)
+            theta_knee_alt = self.normalize_angle(theta_knee_alt)
+            
+            rospy.loginfo(f"[IK DEBUG] Alternative config: hip={math.degrees(theta_hip_alt):.2f}°, knee={math.degrees(theta_knee_alt):.2f}°")
+            
+            # Check if alternative configuration is within limits
+            hip_alt_in_limits = (theta_hip_alt >= self.theta1_min and theta_hip_alt <= self.theta1_max)
+            knee_alt_in_limits = (theta_knee_alt >= self.theta2_min and theta_knee_alt <= self.theta2_max)
+            rospy.loginfo(f"[IK DEBUG] Alt limits check: hip_ok={hip_alt_in_limits}, knee_ok={knee_alt_in_limits}")
+            
+            if hip_alt_in_limits and knee_alt_in_limits:
+                rospy.loginfo(f"[IK DEBUG] Using alternative configuration: hip={math.degrees(theta_hip_alt):.1f}° knee={math.degrees(theta_knee_alt):.1f}°")
+                return theta_hip_alt, theta_knee_alt
+            
+            # Both configurations exceed limits
+            rospy.logwarn(f"[IK DEBUG] Both configurations exceed limits")
+            rospy.logwarn(f"[IK DEBUG] Primary: hip={math.degrees(theta_hip):.1f}° knee={math.degrees(theta_knee):.1f}°")
+            rospy.logwarn(f"[IK DEBUG] Alternative: hip={math.degrees(theta_hip_alt):.1f}° knee={math.degrees(theta_knee_alt):.1f}°")
             return self.ERROR_JOINT_LIMITS, self.ERROR_JOINT_LIMITS
         
+        rospy.loginfo(f"[IK DEBUG] SUCCESS: hip={math.degrees(theta_hip):.2f}°, knee={math.degrees(theta_knee):.2f}°")
         return theta_hip, theta_knee
 
     def calculate_joint_velocities(self, theta_hip, theta_knee, ankle_vx, ankle_vy):

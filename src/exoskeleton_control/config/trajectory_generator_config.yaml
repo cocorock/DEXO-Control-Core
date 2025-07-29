@@ -14,10 +14,10 @@ joint_limits:
   hip_min_deg: -30    # Hip joint minimum angle
   hip_max_deg: 90     # Hip joint maximum angle  
   knee_min_deg: -100  # Knee joint minimum angle
-  knee_max_deg: 0     # Knee joint maximum angle
+  knee_max_deg: 5     # Knee joint maximum angle
 
 # Trajectory File Configuration
-trajectory_file: "new_processed_gait_data#39_1_json_structure_1.json"  # JSON file path
+trajectory_file: "gait_data_39_1.json"  # JSON file path
 package_path: "$(find exoskeleton_control)/data"  # Package relative path
 
 # Trajectory Processing Parameters

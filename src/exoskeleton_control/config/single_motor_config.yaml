@@ -11,7 +11,7 @@ gains:
     kp: 5.0
     kd: 5.0
   trajectory:
-    kp: 20.0
+    kp: 10.0
     kd: 1.0
 
 # Single Motor Configuration
