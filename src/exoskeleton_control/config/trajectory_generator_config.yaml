@@ -11,7 +11,7 @@ leg_parameters:
 
 # Joint Limits (degrees) - converted to radians internally
 joint_limits:
-  hip_min_deg: -30    # Hip joint minimum angle
+  hip_min_deg: -50    # Hip joint minimum angle
   hip_max_deg: 90     # Hip joint maximum angle  
   knee_min_deg: -100  # Knee joint minimum angle
   knee_max_deg: 5     # Knee joint maximum angle

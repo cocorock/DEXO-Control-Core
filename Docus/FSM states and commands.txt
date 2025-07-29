@@ -1,0 +1,39 @@
+States of the exoskeleton:
+	Init
+	Calibration_process
+	Ready
+	Walking
+	Stoping
+	E_stop
+	Shutdown
+
+Crtuches commands
+	1.st_Calibration_trig
+	2.st_walking_trig
+	3.stop_trig
+	4.shutdown
+	5.disable_motors, temporary disabled
+	6.break_motors, temporary disabled
+
+The cruthches commands are currently implemented by the dummy_crutches_node a it receives the commands through the CLI.
+
+State machine valid transitions:
+
+Init -> Calibration_process:	1.st_Calibration_trig
+Calibration_process -> Init:	Failed_Calibration
+Calibration_process -> Ready:	Calibration_complete
+Calibration_process -> E_stop:	4.shutdown, E_stop (motor_control_node)
+Ready -> Walking:				2.st_walking_trig
+Ready -> E_stop: 				4.shutdown, E_stop (E_strop triggered by any node)
+Walking -> Stoping:				3.stop_trig
+Walking -> E_stop:				4.shutdown, E_stop (E_strop triggered by any node)
+Stoping -> Ready:				cycle_finished? (E_strop triggered by trajectory node)
+Stoping -> E_stop:				4.shutdown, E_stop (E_strop triggered by any node)
+E_stop ->Shutdown:				always
+
+*each lines defines each of transitions of the FSM. The event in charge of triggering of the transition is described after the ':' with the node responsible or where the event occurs is inside parethesis.
+The E_stop state is accesable via 4.shutdown or E_stop event in any node.
+
+1. stop_trigger and manual_calibration_trigger need to be replace for one new topic using a new message that hold command sent from the dummy_crutches
+
+2.
