@@ -379,7 +379,7 @@ def read_motor_status(bus, motor_controller: MotorController, motor_state: Motor
                 # Filter out known noise IDs
                 if can_id in noise_ids:
                     if debug_flag:
-                        print(f"Filtering noise frame: ID={hex(can_id)}, Data={[hex(b) for b in can_data]}")
+                        print(f"Filt. F: ID={hex(can_id)}")
                     
                     continue
                 

@@ -204,7 +204,6 @@ class SingleMotorControlNode:
         elif msg.trigger:
             rospy.logwarn(f"Calibration trigger ignored - current state: {self.calibration_state.value}")
 
-
     def perform_calibration(self):
         """Complete calibration process including motor setup and limit detection"""
         rospy.loginfo(f"Starting calibration for motor {self.motor_config.joint_name}")
@@ -225,7 +224,7 @@ class SingleMotorControlNode:
             
             # Read response after entering mode
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=10, debug_flag=self.debug_flag)
             rospy.loginfo("  Motor entered MIT mode")
             
             # Step 3: Safe zero position (this takes up to 2 seconds and blocks until complete)
@@ -258,7 +257,7 @@ class SingleMotorControlNode:
                     
                     # Always read response after sending command
                     if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                                    max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag):
+                                                    max_attempts=3, timeout_ms=5, debug_flag=self.debug_flag):
                         # Check if motor position exceeds configured angle limits in the direction of movement
                         limit_exceeded = False
                         if direction > 0 and self.motor_state.p_out > self.motor_config.max_angle_rad:
@@ -286,7 +285,7 @@ class SingleMotorControlNode:
                             time.sleep(0.1)
                             # Read response after stopping
                             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                                          max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+                                                          max_attempts=3, timeout_ms=5, debug_flag=self.debug_flag)
                             time.sleep(0.2)
                             break
                         
@@ -301,7 +300,7 @@ class SingleMotorControlNode:
                             time.sleep(0.1)
                             # Read response after stopping
                             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                                          max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+                                                          max_attempts=3, timeout_ms=5, debug_flag=self.debug_flag)
                             time.sleep(0.2)
                             break
 
@@ -333,7 +332,7 @@ class SingleMotorControlNode:
             time.sleep(0.1)
             # Read response after moving to center
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=3, timeout_ms=100, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=5, debug_flag=self.debug_flag)
             time.sleep(2.0)
             
             rospy.loginfo("Calibration completed successfully!")
@@ -400,17 +399,17 @@ class SingleMotorControlNode:
         except Exception as e:
             rospy.logerr(f"Error during emergency shutdown: {e}")
 
-    def read_motor_state(self):
+    def update_motor_state(self):
         with self.motor_lock:
-            if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                            max_attempts=2, timeout_ms=100, debug_flag=self.debug_flag):
-                self.motor_position = self.motor_state.p_out
-                self.motor_velocity = self.motor_state.v_out
-                self.motor_torque = self.motor_state.t_out
-                self.motor_temperature = self.motor_state.temperature
-                self.motor_error_flag = self.motor_state.error_flag
-            else:
-                rospy.logwarn_throttle(1.0, "Failed to read motor status")
+            # if motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
+            #                                 max_attempts=2, timeout_ms=100, debug_flag=self.debug_flag):
+            self.motor_position = self.motor_state.p_out
+            self.motor_velocity = self.motor_state.v_out
+            self.motor_torque = self.motor_state.t_out
+            self.motor_temperature = self.motor_state.temperature
+            self.motor_error_flag = self.motor_state.error_flag
+            # else:
+            #     rospy.logwarn_throttle(1.0, "Failed to Update motor state")
 
     def send_motor_command(self):
         if not self.motor_config.is_calibrated:
@@ -434,7 +433,7 @@ class SingleMotorControlNode:
             
             # Always read response after sending command to clear buffer
             motor_driver.read_motor_status(self.can_channel, self.motor_controller, self.motor_state, 
-                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+                                         max_attempts=3, timeout_ms=1, debug_flag=self.debug_flag)
 
     def publish_motor_status(self):
         msg = MotorStatus()
@@ -471,8 +470,9 @@ class SingleMotorControlNode:
 
             # Normal operation when calibrated
             if self.calibration_state == CalibrationState.COMPLETED:
-                # self.read_motor_state()
                 self.send_motor_command()
+                self.update_motor_state()
+                # self.read_motor_state()
             
             # Always publish status (unless emergency stopped)
             if not self.is_emergency_stop:
