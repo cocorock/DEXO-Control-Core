@@ -5,7 +5,7 @@ import json
 import math
 import numpy as np
 import os
-from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger
+from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger, Trigger
 
 class TrajectoryGeneratorNode:
     def __init__(self):
@@ -27,6 +27,7 @@ class TrajectoryGeneratorNode:
 
         # Publishers
         self.joints_trajectory_pub = rospy.Publisher('joints_trajectory', JointsTrajectory, queue_size=10)
+        self.cycle_finished_pub = rospy.Publisher('cycle_finished', Trigger, queue_size=1)
 
         # Load trajectory from JSON for testing
         self.load_trajectory_from_json()
@@ -418,9 +419,13 @@ class TrajectoryGeneratorNode:
             if self.loop_trajectory:
                 self.current_trajectory_index = 0
                 rospy.loginfo("Trajectory loop completed, restarting")
+                # Publish cycle finished signal
+                self.publish_cycle_finished()
             else:
                 rospy.loginfo("Trajectory completed")
                 self.trajectory_active = False
+                # Publish cycle finished signal
+                self.publish_cycle_finished()
         
         return {
             'time': current_time,
@@ -485,10 +490,32 @@ class TrajectoryGeneratorNode:
         """Stop trajectory playback."""
         self.trajectory_active = False
         rospy.loginfo("Trajectory playback stopped")
+        # Publish cycle finished signal when stopping
+        self.publish_cycle_finished()
+
+    def publish_cycle_finished(self):
+        """Publish cycle finished signal to emergency stop node."""
+        cycle_msg = Trigger()
+        cycle_msg.header.stamp = rospy.Time.now()
+        cycle_msg.trigger = True
+        self.cycle_finished_pub.publish(cycle_msg)
+        rospy.loginfo("Cycle finished signal published")
+
+    def shutdown(self):
+        """Cleanup method called on node shutdown."""
+        rospy.loginfo("Shutting down Trajectory Generator Node...")
+        
+        # Stop trajectory playback
+        self.trajectory_active = False
+        
+        rospy.loginfo("Trajectory Generator Node shutdown complete")
 
     def run(self):
         """Main execution loop."""
         rospy.loginfo("Trajectory Generator Node running...")
+        
+        # Register shutdown handler
+        rospy.on_shutdown(self.shutdown)
         
         # Auto-start trajectory if data is available
         if self.trajectory_data and not self.trajectory_active:

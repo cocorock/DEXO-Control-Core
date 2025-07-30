@@ -7,49 +7,52 @@ Provides CLI interface to send stop_trigger and calibration_trigger messages
 import rospy
 import threading
 import sys
-from exoskeleton_control.msg import StopTrigger, Trigger
+from exoskeleton_control.msg import CrutchCommand
 
 class DummyCrutchesNode:
     def __init__(self):
         rospy.init_node('dummy_crutches_node')
         
         # Publishers
-        self.stop_trigger_pub = rospy.Publisher('stop_trigger', Trigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('manual_calibration_trigger', Trigger, queue_size=1)
+        self.crutch_command_pub = rospy.Publisher('/crutch_command', CrutchCommand, queue_size=1)
         
         # CLI interface running in separate thread
         self.cli_thread = threading.Thread(target=self.cli_interface)
         self.cli_thread.daemon = True
         
         rospy.loginfo("Dummy Crutches Node started")
-        rospy.loginfo("Use the CLI interface to send triggers:")
-        rospy.loginfo("  'c' or 'calibrate' - Send calibration trigger")
-        rospy.loginfo("  's' or 'stop' - Send stop trigger")
-        rospy.loginfo("  'r' or 'resume' - Clear stop trigger")
+        rospy.loginfo("Use the CLI interface to send commands:")
+        rospy.loginfo("  'c' or 'calibrate' - Send ST_CALIBRATION_TRIG")
+        rospy.loginfo("  'w' or 'walk' - Send ST_WALKING_TRIG")
+        rospy.loginfo("  's' or 'stop' - Send STOP_TRIG")
+        rospy.loginfo("  'x' or 'shutdown' - Send SHUTDOWN command")
         rospy.loginfo("  'h' or 'help' - Show help")
         rospy.loginfo("  'q' or 'quit' - Exit")
 
-    def send_calibration_trigger(self):
-        """Send calibration trigger message."""
-        msg = Trigger()
+    def send_crutch_command(self, command, description):
+        """Send crutch command message."""
+        msg = CrutchCommand()
         msg.header.stamp = rospy.Time.now()
-        msg.trigger = True
+        msg.command = command
         
-        self.calibration_trigger_pub.publish(msg)
-        rospy.loginfo("✅ Calibration trigger sent")
+        self.crutch_command_pub.publish(msg)
+        rospy.loginfo(f"✅ {description} sent")
 
-    def send_stop_trigger(self, stop=True):
-        """Send stop trigger message."""
-        msg = Trigger()
-        msg.header.stamp = rospy.Time.now()
-        msg.trigger = stop
-        
-        self.stop_trigger_pub.publish(msg)
-        
-        if stop:
-            rospy.logwarn("🛑 Stop trigger sent")
-        else:
-            rospy.loginfo("▶️  Stop trigger cleared (resume)")
+    def send_calibration_trigger(self):
+        """Send ST_CALIBRATION_TRIG command."""
+        self.send_crutch_command(CrutchCommand.ST_CALIBRATION_TRIG, "ST_CALIBRATION_TRIG")
+
+    def send_walking_trigger(self):
+        """Send ST_WALKING_TRIG command."""
+        self.send_crutch_command(CrutchCommand.ST_WALKING_TRIG, "ST_WALKING_TRIG")
+
+    def send_stop_trigger(self):
+        """Send STOP_TRIG command."""
+        self.send_crutch_command(CrutchCommand.STOP_TRIG, "STOP_TRIG")
+
+    def send_shutdown_command(self):
+        """Send SHUTDOWN command."""
+        self.send_crutch_command(CrutchCommand.SHUTDOWN, "SHUTDOWN")
 
     def show_help(self):
         """Show available commands."""
@@ -57,9 +60,10 @@ class DummyCrutchesNode:
         print("DUMMY CRUTCHES - MANUAL CONTROL INTERFACE")
         print("="*50)
         print("Available commands:")
-        print("  c, calibrate  - Send calibration trigger")
-        print("  s, stop       - Send emergency stop trigger")
-        print("  r, resume     - Clear stop trigger (resume operation)")
+        print("  c, calibrate  - Send ST_CALIBRATION_TRIG")
+        print("  w, walk       - Send ST_WALKING_TRIG")
+        print("  s, stop       - Send STOP_TRIG")
+        print("  x, shutdown   - Send SHUTDOWN command")
         print("  h, help       - Show this help message")
         print("  q, quit       - Exit the program")
         print("  status        - Show current system status")
@@ -72,8 +76,7 @@ class DummyCrutchesNode:
         print("-"*30)
         print(f"Node: dummy_crutches_node")
         print(f"Publishers:")
-        print(f"  stop_trigger: {self.stop_trigger_pub.get_num_connections()} subscribers")
-        print(f"  calibration_trigger: {self.calibration_trigger_pub.get_num_connections()} subscribers")
+        print(f"  crutch_command: {self.crutch_command_pub.get_num_connections()} subscribers")
         print(f"ROS Time: {rospy.Time.now()}")
         print("-"*30 + "\n")
 
@@ -90,11 +93,14 @@ class DummyCrutchesNode:
                 if command in ['c', 'calibrate']:
                     self.send_calibration_trigger()
                 
-                elif command in ['s', 'stop']:
-                    self.send_stop_trigger(stop=True)
+                elif command in ['w', 'walk']:
+                    self.send_walking_trigger()
                 
-                elif command in ['r', 'resume']:
-                    self.send_stop_trigger(stop=False)
+                elif command in ['s', 'stop']:
+                    self.send_stop_trigger()
+                
+                elif command in ['x', 'shutdown']:
+                    self.send_shutdown_command()
                 
                 elif command in ['h', 'help']:
                     self.show_help()

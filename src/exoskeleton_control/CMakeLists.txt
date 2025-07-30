@@ -12,6 +12,7 @@ add_message_files(
   FILES
   EStopTrigger.msg
   Trigger.msg
+  CrutchCommand.msg
   GaitParams.msg
   JointsTrajectory.msg
   ExoskeletonState.msg

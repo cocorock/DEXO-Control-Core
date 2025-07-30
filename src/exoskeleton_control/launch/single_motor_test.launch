@@ -18,8 +18,8 @@
   <!-- Emergency Stop Node -->
   <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
     <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
-    <remap from="stop_trigger" to="stop_trigger"/>
-    <remap from="manual_calibration_trigger" to="/manual_calibration_trigger"/>
+    <remap from="crutch_command" to="/crutch_command"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
   </node>
