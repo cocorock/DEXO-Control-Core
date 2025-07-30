@@ -1,11 +1,7 @@
-States of the exoskeleton:
-	Init
-	Calibration_process
-	Ready
-	Walking
-	Stoping
-	E_stop
-	Shutdown
+I need you to help me modify the nodes you use in the @src/exoskeleton_control/launch/core_nodes.launch and also the The @src/exoskeleton_control/scripts/dummy_crutches_node.py that I run in a separately terminal thats why it is not defined in the launch file
+
+I need to implement the following state machine inside the @src/exoskeleton_control/scripts/dummy_crutches_node.py  
+which already has a state machine but we need to update the states with the one describe below.
 
 Crtuches commands
 	1.st_Calibration_trig
@@ -16,26 +12,38 @@ Crtuches commands
 	6.break_motors, temporary disabled
 
 The cruthches commands are currently implemented by the dummy_crutches_node a it receives the commands through the CLI.
+Stop_trigger and manual_calibration_trigger need to be replace for one new topic using a new message that hold command sent from the @src/exoskeleton_control/scripts/dummy_crutches_node.py
+
+
+States of the exoskeleton:
+	Init
+	Calibration_process
+	Ready
+	Walking
+	Stoping
+	E_stop
 
 State machine valid transitions:
 
-a. Init -> Calibration_process:	1.st_Calibration_trig
-b. Calibration_process -> Init:	Failed_Calibration
-c. Calibration_process -> Ready:	Calibration_complete
+a. Init -> Calibration_process:		1.st_Calibration_trig (dummy_crutches_node)
+b. Calibration_process -> Init:		Failed_Calibration (motor_control_node)
+c. Calibration_process -> Ready:	Calibration_complete (motor_control_node)
 d. Calibration_process -> E_stop:	4.shutdown, E_stop (motor_control_node)
-e. Ready -> Walking:				2.st_walking_trig
+e. Ready -> Walking:				2.st_walking_trig (dummy_crutches_node)
 f. Ready -> E_stop: 				4.shutdown, E_stop (E_strop triggered by any node)
-g. Walking -> Stoping:				3.stop_trig
+g. Walking -> Stoping:				3.stop_trig (dummy_crutches_node)
 j. Walking -> E_stop:				4.shutdown, E_stop (E_strop triggered by any node)
 k. Stoping -> Ready:				cycle_finished? (E_strop triggered by trajectory node)
 h. Stoping -> E_stop:				4.shutdown, E_stop (E_strop triggered by any node)
-i. E_stop ->Shutdown:				always
+i. E_stop ->Shutdown:				ROS shutdown 
 
 *each lines defines each of transitions of the FSM. The event in charge of triggering of the transition is described after the ':' with the node responsible or where the event occurs is inside parethesis.
 The E_stop state is accesable via 4.shutdown or E_stop event in any node.
+Every node should have the implemetation of rospy.on_shutdown() to shutdown and it should be call programatically when the emergency stop is reach in any node. Youd should also define new topics which use the EStopTrigger message for sending the emergency stop if it does not occurs in the emergency stop node, EStopTrigger should be sent triggering the callback and shuting down the system, if the EStopTrigger occurs in a node diferrent from the emergency stop node, it should call its own shutdown function after sending the EStopTrigger to the emergency stop node. 
 
-1. stop_trigger and manual_calibration_trigger need to be replace for one new topic using a new message that hold command sent from the d@ummy_crutches_node
+I need a topic with the message of type Trigger, to send the flag thet the cycle has finished, to the emergency_stop_node. 
 
-2. The @dummy_crutches_node runs in a separately terminal thats why it is not defined in the launch file
+before starting the modification lets check if you understood me.
 
-3. I need a tropic with the message of type Trigger, to send the flag thet the cycle has finished, to the emergency_stop_node. 
+
+rostopic pub /exoskeleton/cycle_finished exoskeleton_control/Trigger "trigger: true" --once

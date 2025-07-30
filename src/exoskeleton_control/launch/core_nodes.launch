@@ -22,17 +22,23 @@
     <remap from="Torques" to="/exoskeleton/torques"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
+    <remap from="calibration_failed" to="/exoskeleton/calibration_failed"/>
+    <remap from="calibration_complete" to="/exoskeleton/calibration_complete"/>
   </node>
 
   <!-- Emergency Stop Node -->
   <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
     <remap from="ExoskeletonState" to="/exoskeleton/state"/>
-    
     <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
-    <remap from="stop_trigger" to="stop_trigger"/>
-    <remap from="manual_calibration_trigger" to="/manual_calibration_trigger"/>
+    <remap from="crutch_command" to="/exoskeleton/crutch_command"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
+    <remap from="calibration_failed" to="/exoskeleton/calibration_failed"/>
+    <remap from="calibration_complete" to="/exoskeleton/calibration_complete"/>
+    <remap from="walking_trigger" to="/exoskeleton/walking_trigger"/>
+    <remap from="stopping_trigger" to="/exoskeleton/stopping_trigger"/>
+    <remap from="system_state" to="/exoskeleton/system_state"/>
   </node>
 
   <!-- Trajectory Generator Node -->
@@ -41,7 +47,31 @@
     <remap from="gait_params" to="/exoskeleton/gait_params"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
   </node>
 
+  <!-- Dummy Crutches Node -->
+  <node name="dummy_crutches_node" pkg="exoskeleton_control" type="dummy_crutches_node.py" output="screen">
+    <remap from="crutch_command" to="/exoskeleton/crutch_command"/>
+  </node>
+
+  <!-- Single Motor Control Node (for testing) -->
+  <node name="single_motor_control_node" pkg="exoskeleton_control" type="single_motor_control_node.py" output="screen">
+    <param name="motor/id" value="1"/>
+    <param name="motor/controller_id" value="6"/>
+    <param name="motor/joint_name" value="test_motor"/>
+    <param name="motor/model" value="AK80_64"/>
+    <param name="motor/angle_limits_deg" value="[-45, 45]"/>
+    <param name="motor/direction" value="1"/>
+    <remap from="Motor_Status" to="/exoskeleton/single_motor_status"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
+    <remap from="calibration_failed" to="/exoskeleton/calibration_failed"/>
+    <remap from="calibration_complete" to="/exoskeleton/calibration_complete"/>
+    <remap from="walking_trigger" to="/exoskeleton/walking_trigger"/>
+    <remap from="stopping_trigger" to="/exoskeleton/stopping_trigger"/>
+    <remap from="system_state" to="/exoskeleton/system_state"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
+  </node>
 
 </launch>

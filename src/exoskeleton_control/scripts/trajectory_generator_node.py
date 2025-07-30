@@ -5,7 +5,7 @@ import json
 import math
 import numpy as np
 import os
-from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger
+from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger, Trigger
 
 class TrajectoryGeneratorNode:
     def __init__(self):
@@ -27,6 +27,7 @@ class TrajectoryGeneratorNode:
 
         # Publishers
         self.joints_trajectory_pub = rospy.Publisher('joints_trajectory', JointsTrajectory, queue_size=10)
+        self.cycle_finished_pub = rospy.Publisher('cycle_finished', Trigger, queue_size=1)
 
         # Load trajectory from JSON for testing
         self.load_trajectory_from_json()
@@ -421,6 +422,8 @@ class TrajectoryGeneratorNode:
             else:
                 rospy.loginfo("Trajectory completed")
                 self.trajectory_active = False
+                # Send cycle finished signal
+                self.send_cycle_finished()
         
         return {
             'time': current_time,
@@ -485,6 +488,14 @@ class TrajectoryGeneratorNode:
         """Stop trajectory playback."""
         self.trajectory_active = False
         rospy.loginfo("Trajectory playback stopped")
+
+    def send_cycle_finished(self):
+        """Send cycle finished signal to emergency stop node."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.cycle_finished_pub.publish(msg)
+        rospy.loginfo("Cycle finished signal sent")
 
     def run(self):
         """Main execution loop."""

@@ -7,49 +7,55 @@ Provides CLI interface to send stop_trigger and calibration_trigger messages
 import rospy
 import threading
 import sys
-from exoskeleton_control.msg import StopTrigger, Trigger
+from exoskeleton_control.msg import CrutchCommand
 
 class DummyCrutchesNode:
     def __init__(self):
         rospy.init_node('dummy_crutches_node')
         
         # Publishers
-        self.stop_trigger_pub = rospy.Publisher('stop_trigger', Trigger, queue_size=1)
-        self.calibration_trigger_pub = rospy.Publisher('manual_calibration_trigger', Trigger, queue_size=1)
+        self.crutch_command_pub = rospy.Publisher('crutch_command', CrutchCommand, queue_size=1)
         
         # CLI interface running in separate thread
         self.cli_thread = threading.Thread(target=self.cli_interface)
         self.cli_thread.daemon = True
         
         rospy.loginfo("Dummy Crutches Node started")
-        rospy.loginfo("Use the CLI interface to send triggers:")
-        rospy.loginfo("  'c' or 'calibrate' - Send calibration trigger")
-        rospy.loginfo("  's' or 'stop' - Send stop trigger")
-        rospy.loginfo("  'r' or 'resume' - Clear stop trigger")
+        rospy.loginfo("Use the CLI interface to send commands:")
+        rospy.loginfo("  'c' or 'calibrate' - Start calibration (st_Calibration_trig)")
+        rospy.loginfo("  'w' or 'walk' - Start walking (st_walking_trig)")
+        rospy.loginfo("  's' or 'stop' - Stop walking (stop_trig)")
+        rospy.loginfo("  'e' or 'emergency' - Emergency shutdown")
+        rospy.loginfo("  'd' or 'disable' - Disable motors (not implemented)")
+        rospy.loginfo("  'b' or 'brake' - Brake motors (not implemented)")
         rospy.loginfo("  'h' or 'help' - Show help")
         rospy.loginfo("  'q' or 'quit' - Exit")
 
-    def send_calibration_trigger(self):
-        """Send calibration trigger message."""
-        msg = Trigger()
+    def send_crutch_command(self, command_type):
+        """Send crutch command message."""
+        msg = CrutchCommand()
         msg.header.stamp = rospy.Time.now()
-        msg.trigger = True
+        msg.command = command_type
         
-        self.calibration_trigger_pub.publish(msg)
-        rospy.loginfo("✅ Calibration trigger sent")
-
-    def send_stop_trigger(self, stop=True):
-        """Send stop trigger message."""
-        msg = Trigger()
-        msg.header.stamp = rospy.Time.now()
-        msg.trigger = stop
+        self.crutch_command_pub.publish(msg)
         
-        self.stop_trigger_pub.publish(msg)
+        command_names = {
+            CrutchCommand.ST_CALIBRATION_TRIG: "Start Calibration",
+            CrutchCommand.ST_WALKING_TRIG: "Start Walking", 
+            CrutchCommand.STOP_TRIG: "Stop Walking",
+            CrutchCommand.SHUTDOWN: "Emergency Shutdown",
+            CrutchCommand.DISABLE_MOTORS: "Disable Motors",
+            CrutchCommand.BREAK_MOTORS: "Brake Motors"
+        }
         
-        if stop:
-            rospy.logwarn("🛑 Stop trigger sent")
+        command_name = command_names.get(command_type, f"Unknown({command_type})")
+        
+        if command_type == CrutchCommand.SHUTDOWN:
+            rospy.logwarn(f"🚨 {command_name} command sent")
+        elif command_type == CrutchCommand.STOP_TRIG:
+            rospy.logwarn(f"🛑 {command_name} command sent")
         else:
-            rospy.loginfo("▶️  Stop trigger cleared (resume)")
+            rospy.loginfo(f"✅ {command_name} command sent")
 
     def show_help(self):
         """Show available commands."""
@@ -57,9 +63,12 @@ class DummyCrutchesNode:
         print("DUMMY CRUTCHES - MANUAL CONTROL INTERFACE")
         print("="*50)
         print("Available commands:")
-        print("  c, calibrate  - Send calibration trigger")
-        print("  s, stop       - Send emergency stop trigger")
-        print("  r, resume     - Clear stop trigger (resume operation)")
+        print("  c, calibrate  - Start calibration process")
+        print("  w, walk       - Start walking mode")
+        print("  s, stop       - Stop walking (return to ready)")
+        print("  e, emergency  - Emergency shutdown")
+        print("  d, disable    - Disable motors (not implemented)")
+        print("  b, brake      - Brake motors (not implemented)")
         print("  h, help       - Show this help message")
         print("  q, quit       - Exit the program")
         print("  status        - Show current system status")
@@ -72,8 +81,7 @@ class DummyCrutchesNode:
         print("-"*30)
         print(f"Node: dummy_crutches_node")
         print(f"Publishers:")
-        print(f"  stop_trigger: {self.stop_trigger_pub.get_num_connections()} subscribers")
-        print(f"  calibration_trigger: {self.calibration_trigger_pub.get_num_connections()} subscribers")
+        print(f"  crutch_command: {self.crutch_command_pub.get_num_connections()} subscribers")
         print(f"ROS Time: {rospy.Time.now()}")
         print("-"*30 + "\n")
 
@@ -88,13 +96,22 @@ class DummyCrutchesNode:
                 command = input("\nEnter command: ").strip().lower()
                 
                 if command in ['c', 'calibrate']:
-                    self.send_calibration_trigger()
+                    self.send_crutch_command(CrutchCommand.ST_CALIBRATION_TRIG)
+                
+                elif command in ['w', 'walk']:
+                    self.send_crutch_command(CrutchCommand.ST_WALKING_TRIG)
                 
                 elif command in ['s', 'stop']:
-                    self.send_stop_trigger(stop=True)
+                    self.send_crutch_command(CrutchCommand.STOP_TRIG)
                 
-                elif command in ['r', 'resume']:
-                    self.send_stop_trigger(stop=False)
+                elif command in ['e', 'emergency']:
+                    self.send_crutch_command(CrutchCommand.SHUTDOWN)
+                
+                elif command in ['d', 'disable']:
+                    self.send_crutch_command(CrutchCommand.DISABLE_MOTORS)
+                
+                elif command in ['b', 'brake']:
+                    self.send_crutch_command(CrutchCommand.BREAK_MOTORS)
                 
                 elif command in ['h', 'help']:
                     self.show_help()

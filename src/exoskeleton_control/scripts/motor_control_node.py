@@ -241,6 +241,9 @@ class MotorControlNode:
         self.exoskeleton_state_pub = rospy.Publisher('ExoskeletonState', ExoskeletonState, queue_size=1)
         self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
         self.torques_pub = rospy.Publisher('Torques', Torques, queue_size=1)
+        self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
+        self.calibration_failed_pub = rospy.Publisher('calibration_failed', Trigger, queue_size=1)
+        self.calibration_complete_pub = rospy.Publisher('calibration_complete', Trigger, queue_size=1)
 
         self.rate = rospy.Rate(self.control_frequency)
 
@@ -556,6 +559,7 @@ class MotorControlNode:
                     # Check for timeout
                     if time.time() - direction_start_time > self.max_calibration_time:
                         rospy.logerr(f"Calibration timeout for motor {motor_id}")
+                        self.trigger_emergency_stop_and_shutdown(f"Calibration timeout for motor {motor_id}")
                         return False
                     
                     # Check for emergency stop
@@ -640,6 +644,8 @@ class MotorControlNode:
             # All motors calibrated successfully
             self.calibration_state = CalibrationState.COMPLETED
             rospy.loginfo("All motors calibrated successfully!")
+            # Send calibration complete message
+            self.send_calibration_complete()
             return
         
         motor_id = self.calibration_sequence[self.current_calibration_motor]
@@ -666,6 +672,8 @@ class MotorControlNode:
             # Failure - reset all calibration
             rospy.logerr(f"Calibration failed for motor {motor_id}")
             self.calibration_state = CalibrationState.FAILED
+            # Send calibration failed message
+            self.send_calibration_failed()
 
     def reset_calibration(self):
         """Reset calibration to initial state."""
@@ -975,6 +983,42 @@ class MotorControlNode:
             rospy.loginfo("Emergency shutdown already performed - skipping redundant shutdown")
         
         rospy.loginfo("Motor control node shutdown complete")
+
+    def send_calibration_failed(self):
+        """Send calibration failed message to emergency stop node."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.calibration_failed_pub.publish(msg)
+        rospy.logwarn("Calibration failed message sent")
+
+    def send_calibration_complete(self):
+        """Send calibration complete message to emergency stop node."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.calibration_complete_pub.publish(msg)
+        rospy.loginfo("Calibration complete message sent")
+
+    def trigger_emergency_stop_and_shutdown(self, reason="Motor control emergency"):
+        """Trigger emergency stop and shutdown the node."""
+        rospy.logerr(f"MOTOR CONTROL EMERGENCY: {reason}")
+        
+        # Set emergency stop flag
+        self.is_emergency_stop = True
+        
+        # Stop all motors immediately
+        self.emergency_stop_motors()
+        
+        # Send emergency stop message
+        e_stop_msg = EStopTrigger()
+        e_stop_msg.header.stamp = rospy.Time.now()
+        e_stop_msg.trigger = True
+        e_stop_msg.state = "MOTOR_EMERGENCY"
+        self.e_stop_trigger_pub.publish(e_stop_msg)
+        
+        # Shutdown after brief delay
+        rospy.Timer(rospy.Duration(0.5), lambda event: rospy.signal_shutdown(reason), oneshot=True)
 
 
 if __name__ == '__main__':

@@ -43,6 +43,11 @@ class SingleMotorControlNode:
         self.calibration_state = CalibrationState.NOT_STARTED
         self.is_emergency_stop = False
         
+        # System state tracking (synchronized with emergency stop node)
+        self.system_state = "INIT"  # Track emergency stop node state
+        self.previous_state = "INIT"
+        self.state_lock = threading.Lock()
+        
         self.setup_motor_configuration()
         
         self.motor_controller = None
@@ -74,9 +79,13 @@ class SingleMotorControlNode:
         # self.generate_trajectory()
 
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
-        rospy.Subscriber('calibration_trigger_fw', Trigger, self.calibration_trigger_callback)
+        rospy.Subscriber('system_state', Trigger, self.system_state_callback)
 
         self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
+        self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
+        self.calibration_failed_pub = rospy.Publisher('calibration_failed', Trigger, queue_size=1)
+        self.calibration_complete_pub = rospy.Publisher('calibration_complete', Trigger, queue_size=1)
+        self.cycle_finished_pub = rospy.Publisher('cycle_finished', Trigger, queue_size=1)
 
         self.rate = rospy.Rate(self.control_frequency)
 
@@ -178,7 +187,9 @@ class SingleMotorControlNode:
 
     def e_stop_callback(self, msg):
         if msg.trigger:
-            self.is_emergency_stop = True
+            with self.state_lock:
+                self.is_emergency_stop = True
+                self.system_state = "E_STOP"
             rospy.logwarn("Emergency stop triggered - initiating shutdown sequence")
             
             # Stop the motor immediately
@@ -195,14 +206,19 @@ class SingleMotorControlNode:
             rospy.signal_shutdown("Emergency stop triggered")
         else:
             self.is_emergency_stop = False
+            # Update system state from message if available
+            if hasattr(msg, 'state'):
+                self.handle_state_transition(msg.state)
 
-    def calibration_trigger_callback(self, msg):
-        rospy.loginfo("Calibration trigger received")
-        if msg.trigger and self.calibration_state == CalibrationState.NOT_STARTED:
-            rospy.loginfo("Calibration trigger accepted - will start calibration")
-            self.calibration_state = CalibrationState.START_CALIBRATION
-        elif msg.trigger:
-            rospy.logwarn(f"Calibration trigger ignored - current state: {self.calibration_state.value}")
+
+
+
+    def system_state_callback(self, msg):
+        """Handle system state updates from emergency stop node."""
+        # For now, we'll monitor emergency stop node's published states via logs
+        # and track state through the emergency stop trigger message
+        rospy.loginfo("System state update received from emergency stop node")
+
 
     def perform_calibration(self):
         """Complete calibration process including motor setup and limit detection"""
@@ -306,6 +322,7 @@ class SingleMotorControlNode:
 
                 else:
                     rospy.logerr("Calibration timeout - limit not found")
+                    self.trigger_emergency_stop_and_shutdown("Calibration timeout - limit not found")
                     return False
 
             if len(limits) != 2:
@@ -322,7 +339,7 @@ class SingleMotorControlNode:
             rospy.loginfo(f"  Limits detected: min={self.motor_config.min_limit:.3f}, max={self.motor_config.max_limit:.3f}")
             
             # Step 6: Move to center position
-            center_position = (self.motor_config.min_limit + self.motor_config.max_limit) / 2.0
+            center_position = self.motor_config.min_limit #(self.motor_config.min_limit + self.motor_config.max_limit) / 2.0
             rospy.loginfo(f"  Moving to center position: {center_position:.3f} rad")
             
             self.motor_state.p_in = center_position
@@ -336,10 +353,14 @@ class SingleMotorControlNode:
             time.sleep(2.0)
             
             rospy.loginfo("Calibration completed successfully!")
+            # Send calibration complete message
+            self.send_calibration_complete()
             return True
             
         except Exception as e:
             rospy.logerr(f"Error during calibration: {e}")
+            # Send calibration failed message
+            self.send_calibration_failed()
             return False
 
     def reset_calibration(self):
@@ -416,6 +437,11 @@ class SingleMotorControlNode:
             return False
         if self.is_emergency_stop:
             return False
+        
+        # Only send commands during WALKING state
+        with self.state_lock:
+            if self.system_state != "WALKING":
+                return False
 
         with self.motor_lock:
             self.desired_position = self.trajectory[self.trajectory_index]
@@ -441,6 +467,10 @@ class SingleMotorControlNode:
         msg.motor_ids = [self.motor_config.motor_id]
         msg.joint_names = [self.motor_config.joint_name]
         msg.calibrated_flags = [self.motor_config.is_calibrated]
+        # Add calibration failed field (True if calibration failed)
+        calibration_failed = (self.calibration_state == CalibrationState.FAILED)
+        if hasattr(msg, 'calibration_failed'):
+            msg.calibration_failed = [calibration_failed]
         msg.positions = [self.motor_position]
         msg.velocities = [self.motor_velocity]
         msg.torques = [self.motor_torque]
@@ -448,6 +478,30 @@ class SingleMotorControlNode:
         msg.error_flags = [self.motor_error_flag]
         self.motor_status_pub.publish(msg)
 
+    def handle_state_transition(self, new_state):
+        """Handle state transitions and perform appropriate actions."""
+        with self.state_lock:
+            if self.previous_state == new_state:
+                return  # No state change
+                
+            rospy.loginfo(f"State transition: {self.previous_state} -> {new_state}")
+            
+            # Handle transitions based on current state machine logic
+            if new_state == "CALIBRATION_PROCESS" and self.previous_state == "INIT":
+                # Start calibration when entering CALIBRATION_PROCESS from INIT
+                if self.calibration_state == CalibrationState.NOT_STARTED:
+                    self.calibration_state = CalibrationState.START_CALIBRATION
+                    rospy.loginfo("Calibration will start on next cycle")
+                    
+            elif new_state == "STOPPING" and self.previous_state == "WALKING":
+                # When entering STOPPING from WALKING, signal cycle finished immediately for single motor
+                rospy.loginfo("Entering STOPPING state - single motor will signal cycle finished")
+                # For single motor, we can finish the cycle immediately
+                rospy.Timer(rospy.Duration(1.0), lambda event: self.send_cycle_finished(), oneshot=True)
+                
+            self.previous_state = self.system_state
+            self.system_state = new_state
+            
     def run(self):
         rospy.loginfo("Starting single motor control loop...")
         while not rospy.is_shutdown():
@@ -455,28 +509,67 @@ class SingleMotorControlNode:
             if self.is_emergency_stop:
                 rospy.loginfo("Emergency stop active - exiting control loop")
                 break
+            
+            # Get current system state (thread-safe)
+            with self.state_lock:
+                current_state = self.system_state
                 
-            # Handle calibration trigger
-            if self.calibration_state == CalibrationState.START_CALIBRATION:
-                rospy.loginfo("Starting calibration process...")
-                if self.perform_calibration():
-                    self.calibration_state = CalibrationState.COMPLETED
-                    rospy.loginfo("Calibration completed - ready for trajectory execution")
+            # State-based logic following the emergency stop node state machine
+            if current_state == "INIT":
+                # In INIT state - wait for emergency stop node to transition to CALIBRATION_PROCESS
+                rospy.loginfo_throttle(5, "Single motor in INIT state - waiting for calibration trigger from emergency stop")
+                
+            elif current_state == "CALIBRATION_PROCESS":
+                # Handle calibration when in CALIBRATION_PROCESS state
+                if self.calibration_state == CalibrationState.START_CALIBRATION:
+                    rospy.loginfo("Starting calibration process...")
+                    if self.perform_calibration():
+                        self.calibration_state = CalibrationState.COMPLETED
+                        rospy.loginfo("Calibration completed - ready for trajectory execution")
+                    else:
+                        self.calibration_state = CalibrationState.FAILED
+                        rospy.logerr("Calibration failed")
+                        # Send calibration failed message
+                        self.send_calibration_failed()
+                        self.reset_calibration()
+                elif self.calibration_state == CalibrationState.NOT_STARTED:
+                    # Trigger calibration when entering this state
+                    self.calibration_state = CalibrationState.START_CALIBRATION
+                    
+            elif current_state == "READY":
+                # In READY state - motors calibrated, waiting for walking command
+                if self.calibration_state == CalibrationState.COMPLETED:
+                    rospy.loginfo_throttle(10, "Single motor READY - waiting for walking command from emergency stop")
+                    self.update_motor_state()  # Keep updating motor state
                 else:
-                    self.calibration_state = CalibrationState.FAILED
-                    rospy.logerr("Calibration failed")
-                    self.reset_calibration()
-                continue  # Skip this cycle, don't run trajectory
-
-            # Normal operation when calibrated
-            if self.calibration_state == CalibrationState.COMPLETED:
-                self.send_motor_command()
+                    rospy.logwarn_throttle(5, "In READY state but calibration not completed")
+                    
+            elif current_state == "WALKING":
+                # In WALKING state - execute trajectory
+                if self.calibration_state == CalibrationState.COMPLETED:
+                    self.send_motor_command()
+                    self.update_motor_state()
+                else:
+                    rospy.logerr("Cannot walk - calibration not completed")
+                    
+            elif current_state == "STOPPING":
+                # In STOPPING state - finish current cycle and return to ready
+                rospy.loginfo_throttle(2, "Single motor in STOPPING state - cycle will finish soon")
                 self.update_motor_state()
-                # self.read_motor_state()
+                # Cycle finished signal is sent in handle_state_transition
+                
+            elif current_state == "E_STOP":
+                # Emergency stop state - should not reach here as node will shutdown
+                rospy.logerr("Single motor in E_STOP state - shutting down")
+                break
+                
+            else:
+                rospy.logwarn_throttle(5, f"Unknown system state: {current_state}")
             
             # Always publish status (unless emergency stopped)
             if not self.is_emergency_stop:
                 self.publish_motor_status()
+                
             self.rate.sleep()
 
     def shutdown(self):
@@ -497,6 +590,50 @@ class SingleMotorControlNode:
                 self.can_channel.shutdown()
         else:
             rospy.loginfo("Emergency shutdown already performed - skipping redundant shutdown")
+
+    def send_calibration_failed(self):
+        """Send calibration failed message to emergency stop node."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.calibration_failed_pub.publish(msg)
+        rospy.logwarn("Calibration failed message sent")
+
+    def send_calibration_complete(self):
+        """Send calibration complete message to emergency stop node."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.calibration_complete_pub.publish(msg)
+        rospy.loginfo("Calibration complete message sent")
+        
+    def send_cycle_finished(self):
+        """Send cycle finished message when stopping is complete."""
+        msg = Trigger()
+        msg.header.stamp = rospy.Time.now()
+        msg.trigger = True
+        self.cycle_finished_pub.publish(msg)
+        rospy.loginfo("Cycle finished message sent")
+
+    def trigger_emergency_stop_and_shutdown(self, reason="Single motor control emergency"):
+        """Trigger emergency stop and shutdown the node."""
+        rospy.logerr(f"SINGLE MOTOR CONTROL EMERGENCY: {reason}")
+        
+        # Set emergency stop flag
+        self.is_emergency_stop = True
+        
+        # Stop motor immediately
+        self.emergency_stop_motor()
+        
+        # Send emergency stop message
+        e_stop_msg = EStopTrigger()
+        e_stop_msg.header.stamp = rospy.Time.now()
+        e_stop_msg.trigger = True
+        e_stop_msg.state = "SINGLE_MOTOR_EMERGENCY"
+        self.e_stop_trigger_pub.publish(e_stop_msg)
+        
+        # Shutdown after brief delay
+        rospy.Timer(rospy.Duration(0.5), lambda event: rospy.signal_shutdown(reason), oneshot=True)
 
 if __name__ == '__main__':
     try:
