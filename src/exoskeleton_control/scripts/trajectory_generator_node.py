@@ -448,16 +448,16 @@ class TrajectoryGeneratorNode:
         trajectory_msg.header.stamp = rospy.Time.now()
         
         # Right leg data (from JSON)
-        trajectory_msg.Rhip_pos_ref = traj_point['right_leg_positions'][0]  # Hip position
-        trajectory_msg.Rknee_pos_ref = traj_point['right_leg_positions'][1]  # Knee position
-        trajectory_msg.Rhip_vel_ref = traj_point['right_leg_velocities'][0]  # Hip velocity
-        trajectory_msg.Rknee_vel_ref = traj_point['right_leg_velocities'][1]  # Knee velocity
+        trajectory_msg.Rhip_pos_ref  = 0.1 #traj_point['right_leg_positions'][0]  # Hip position
+        trajectory_msg.Rknee_pos_ref = 0.1 #traj_point['right_leg_positions'][1]  # Knee position
+        trajectory_msg.Rhip_vel_ref  = 0.0 #traj_point['right_leg_velocities'][0]  # Hip velocity
+        trajectory_msg.Rknee_vel_ref = 0.0 #traj_point['right_leg_velocities'][1]  # Knee velocity
         
         # Left leg data (placeholder - same as right leg for now)
-        trajectory_msg.Lhip_pos_ref = traj_point['left_leg_positions'][0]  # Hip position
-        trajectory_msg.Lknee_pos_ref = traj_point['left_leg_positions'][1]  # Knee position
-        trajectory_msg.Lhip_vel_ref = traj_point['left_leg_velocities'][0]  # Hip velocity
-        trajectory_msg.Lknee_vel_ref = traj_point['left_leg_velocities'][1]  # Knee velocity
+        trajectory_msg.Lhip_pos_ref  = 0.1 # traj_point['left_leg_positions'][0]  # Hip position
+        trajectory_msg.Lknee_pos_ref = 0.1 # traj_point['left_leg_positions'][1]  # Knee position
+        trajectory_msg.Lhip_vel_ref  = 0.0 # traj_point['left_leg_velocities'][0]  # Hip velocity
+        trajectory_msg.Lknee_vel_ref = 0.0 # traj_point['left_leg_velocities'][1]  # Knee velocity
         
         # Publish trajectory
         self.joints_trajectory_pub.publish(trajectory_msg)
