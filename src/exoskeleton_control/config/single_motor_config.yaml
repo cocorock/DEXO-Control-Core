@@ -17,7 +17,7 @@ gains:
 # Single Motor Configuration
 motor:
   id: 1
-  controller_id: 0x06
+  controller_id: 0x08
   joint_name: "test_motor"
   model: "AK80-8"
   angle_limits_deg: [-90, 90]
