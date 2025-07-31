@@ -1,8 +1,8 @@
 # Configuration for the single motor control node
 
 # Calibration Parameters
-torque_threshold: 1.0       # Nm
-calibration_speed_deg: 30.0 # degrees/s
+torque_threshold: 7.0       # Nm
+calibration_speed_deg: 90.0 # degrees/s
 max_calibration_time: 30.0  # seconds
 
 # Control Gains
@@ -11,15 +11,15 @@ gains:
     kp: 5.0
     kd: 5.0
   trajectory:
-    kp: 10.0
+    kp: 15.0
     kd: 1.0
 
 # Single Motor Configuration
 motor:
   id: 1
-  controller_id: 0x08
+  controller_id: 0x06
 
   joint_name: "test_motor"
-  model: "AK80-8"
+  model: "AK80-64"
   angle_limits_deg: [-45, 45]
   direction: 1

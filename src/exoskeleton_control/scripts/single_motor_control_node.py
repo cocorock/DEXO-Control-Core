@@ -66,7 +66,7 @@ class SingleMotorControlNode:
         self.motor_lock = threading.Lock()
         
         # Debug flag for motor driver functions
-        self.debug_flag = False
+        self.debug_flag = True
 
         if not self.initialize_can_interface():
             rospy.signal_shutdown("Failed to initialize CAN interface")

@@ -1,40 +1,71 @@
-# Motor Control Configuration for 2 Motors (Right Hip and Right Knee)
-# Configuration for motor_control_node_2motors
+# =====================================================================
+# DEXO Control Core - 2 Motor Configuration
+# Configuration for motor_control_node_2motors and trajectory_generator
+# =====================================================================
 
-# Calibration parameters
-calibration_sequence: [1 , 2]  # Right hip (1), Right knee (2)
-calibration_speed_deg: 30.0
-max_calibration_time: 30.0
+# =====================================================================
+# MOTOR CONTROL CONFIGURATION
+# =====================================================================
 
-# Motor configurations (2 motors only)
-motor_ids: [0x06, 0x08]  # Right hip, Right knee CAN IDs
-joint_names: ['right_hip', 'right_knee']
-motor_models: ['AK80_64', 'AK80_8']
-angle_limits_deg: [[-50, 90], [-100, 10]]  # [min, max] for each motor
-motor_directions: [1, 1]  # Direction multipliers for each motor
+# Calibration Parameters
+calibration:
+  sequence: [1, 2]               # Calibration order: Right hip (1), Right knee (2)
+  speed_deg: 60.0                # Calibration speed in degrees/second
+  max_time: 30.0                 # Maximum calibration time in seconds
+  torque_thresholds: [7.0, 1.0]  # Torque thresholds [hip, knee] in Nm
 
-# Per-motor torque thresholds for calibration
-torque_thresholds: [3.0, 1.5]  # Right hip: 8.0 Nm, Right knee: 5.0 Nm
+# Motor Hardware Configuration
+motors:
+  ids: [0x06, 0x08]              # CAN IDs: [Right hip, Right knee]
+  joint_names: ['right_hip', 'right_knee']
+  models: ['AK80_64', 'AK80_8']  # Motor models
+  directions: [1, 1]             # Direction multipliers
+  
+  # Joint angle limits in degrees [min, max]
+  angle_limits_deg:
+    - [-50, 90]   # Right hip: -50° to 90°
+    - [-100, 10]   # Right knee: -100° to 10°
 
-# Per-motor control gains
-motor_gains:
-  - # Motor 1 (Right Hip)
-    calibration:
-      kp: 0.0
-      kd: 5.0
-    hold:
-      kp: 2.0
-      kd: 1.5
-    trajectory:
-      kp: 5.0
-      kd: 1.0
-  - # Motor 2 (Right Knee)  
-    calibration:
-      kp: 0.0
-      kd: 5.0
-    hold:
-      kp: 2.0
-      kd: 1.5
-    trajectory:
-      kp: 20.0
-      kd: 1.0
+# Control Gains per Motor
+control_gains:
+  right_hip:
+    calibration: {kp: 0.0, kd: 5.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 15.0, kd: 0.0}
+  
+  right_knee:
+    calibration: {kp: 0.0, kd: 5.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 15.0, kd: 0.0}
+
+# =====================================================================
+# TRAJECTORY GENERATOR CONFIGURATION
+# =====================================================================
+
+trajectory_generator:
+  # Timing Configuration
+  control_frequency: 100         # Hz, synchronized with motor control
+  
+  # Leg Kinematics (meters)
+  leg_parameters:
+    L1: 0.44                     # Thigh length (hip to knee)
+    L2: 0.44                     # Shin length (knee to ankle)
+  
+  # Joint Limits (degrees) - Must match motor limits above
+  joint_limits:
+    hip_min_deg:  -30            # Hip minimum angle
+    hip_max_deg:   90            # Hip maximum angle  
+    knee_min_deg: -100           # Knee minimum angle
+    knee_max_deg:   0            # Knee maximum angle
+  
+  # Trajectory Data Configuration
+  trajectory:
+    file: 'gait_data_39_1.json'
+    loop: true                   # Loop trajectory continuously
+    scale: 1.0                   # Scaling factor for trajectory positions
+    
+  # State-based Output Values
+  output_values:
+    ready_state:   [0.0, 0.0, 0.0, 0.0]  # [hip_pos, knee_pos, hip_vel, knee_vel]
+    walking_state: "trajectory_data"       # Use actual trajectory data
+    stopping_state: [1.0, -1.0, 0.0, 0.0] # Safe stopping position

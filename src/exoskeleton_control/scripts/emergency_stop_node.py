@@ -50,6 +50,8 @@ class EmergencyStopNode:
         rospy.Subscriber('Motor_Status', MotorStatus, self.motor_status_callback)
         rospy.Subscriber('crutch_command', CrutchCommand, self.crutch_command_callback)
         rospy.Subscriber('cycle_finished', Trigger, self.cycle_finished_callback)
+        rospy.Subscriber('calibration_failed', Trigger, self.calibration_failed_callback)
+        rospy.Subscriber('calibration_complete', Trigger, self.calibration_complete_callback)
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
@@ -242,6 +244,20 @@ class EmergencyStopNode:
             rospy.loginfo("e: Cycle finished signal received")
             with self.state_lock:
                 self.cycle_finished = True
+
+    def calibration_failed_callback(self, msg):
+        """Handle calibration failed signal from motor control node."""
+        if msg.trigger:
+            rospy.logwarn("e: Calibration failed signal received")
+            with self.state_lock:
+                self.calibration_failed = True
+
+    def calibration_complete_callback(self, msg):
+        """Handle calibration complete signal from motor control node."""
+        if msg.trigger:
+            rospy.loginfo("e: Calibration complete signal received")
+            with self.state_lock:
+                self.calibration_complete = True
 
     def check_motor_safety(self, msg):
         """Check motor status for safety violations."""

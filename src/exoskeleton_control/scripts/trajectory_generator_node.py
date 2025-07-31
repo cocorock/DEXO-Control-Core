@@ -5,7 +5,7 @@ import json
 import math
 import numpy as np
 import os
-from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger, Trigger
+from exoskeleton_control.msg import GaitParams, JointsTrajectory, EStopTrigger, Trigger, FSMState
 
 class TrajectoryGeneratorNode:
     def __init__(self):
@@ -20,14 +20,20 @@ class TrajectoryGeneratorNode:
         self.current_trajectory_index = 0
         self.trajectory_data = None
         self.trajectory_length = 0
+        
+        # System state tracking (synchronized with emergency stop node)
+        self.system_state = "INIT"  # Track emergency stop node state
+        self.previous_state = "INIT"
 
         # Subscribers
         rospy.Subscriber('gait_params', GaitParams, self.gait_params_callback)
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
+        rospy.Subscriber('fsm_state', FSMState, self.fsm_state_callback)
 
         # Publishers
         self.joints_trajectory_pub = rospy.Publisher('joints_trajectory', JointsTrajectory, queue_size=10)
         self.cycle_finished_pub = rospy.Publisher('cycle_finished', Trigger, queue_size=1)
+        self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
 
         # Load trajectory from JSON for testing
         self.load_trajectory_from_json()
@@ -45,7 +51,7 @@ class TrajectoryGeneratorNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Control parameters
-            self.control_frequency = rospy.get_param('~control_frequency', 15)  # 15-20Hz
+            self.control_frequency = rospy.get_param('~control_frequency', 100)  # 100Hz to match motor control
             
             # Arm/leg parameters
             self.L1 = rospy.get_param('~leg_parameters/L1', 0.44)  # Thigh length (m)
@@ -76,7 +82,7 @@ class TrajectoryGeneratorNode:
 
     def set_default_configuration(self):
         """Set default configuration values."""
-        self.control_frequency = 15
+        self.control_frequency = 100
         self.L1 = 0.44  # Thigh length
         self.L2 = 0.44  # Shin length
         self.theta1_min = math.radians(-30)
@@ -394,12 +400,42 @@ class TrajectoryGeneratorNode:
 
     def e_stop_callback(self, msg):
         """Handle emergency stop."""
-        rospy.loginfo(f"Received e_stop_trigger: {msg.trigger}, state: {msg.state}")
+        rospy.loginfo(f"t: Received e_stop_trigger: {msg.trigger}, state: {msg.state}")
         if msg.trigger:
             self.is_emergency_stop = True
             self.trajectory_active = False
         else:
             self.is_emergency_stop = False
+
+    def fsm_state_callback(self, msg):
+        """Handle FSM state updates from emergency stop node."""
+        rospy.loginfo_throttle(10.0, f"t: Received FSM state: {msg.state}")
+        self.handle_state_transition(msg.state)
+
+    def handle_state_transition(self, new_state):
+        """Handle state transitions and perform appropriate actions."""
+        if self.previous_state == new_state:
+            return  # No state change
+            
+        rospy.loginfo(f"t: State transition: {self.previous_state} -> {new_state}")
+        
+        # Handle transitions based on current state machine logic
+        if new_state == "WALKING" and self.previous_state == "READY":
+            # Start trajectory when entering WALKING from READY
+            if self.trajectory_data and not self.trajectory_active:
+                self.start_trajectory()
+                rospy.loginfo("t: Started trajectory for WALKING state")
+        elif new_state == "STOPPING" and self.previous_state == "WALKING":
+            # Continue trajectory but prepare to signal cycle finished
+            rospy.loginfo("t: Entering STOPPING state - will signal cycle finished when trajectory completes")
+        elif new_state == "READY":
+            # Stop trajectory when entering READY
+            if self.trajectory_active:
+                self.stop_trajectory()
+                rospy.loginfo("t: Stopped trajectory for READY state")
+            
+        self.previous_state = self.system_state
+        self.system_state = new_state
 
     def get_current_trajectory_point(self):
         """Get current trajectory point and advance index."""
@@ -416,14 +452,16 @@ class TrajectoryGeneratorNode:
         
         # Handle looping
         if self.current_trajectory_index >= self.trajectory_length:
-            if self.loop_trajectory:
+            if self.loop_trajectory and self.system_state == "WALKING":
                 self.current_trajectory_index = 0
-                rospy.loginfo("Trajectory loop completed, restarting")
+                rospy.loginfo("t: Trajectory loop completed, restarting")
             else:
-                rospy.loginfo("Trajectory completed")
+                rospy.loginfo("t: =======================================================================================================================================Trajectory completed")
                 self.trajectory_active = False
-                # Send cycle finished signal
-                self.send_cycle_finished()
+                # Send cycle finished signal if in STOPPING state
+                if self.system_state == "STOPPING":
+                    self.send_cycle_finished()
+                    rospy.loginfo("t: Sent cycle finished signal for STOPPING state")
         
         return {
             'time': current_time,
@@ -434,40 +472,83 @@ class TrajectoryGeneratorNode:
         }
 
     def publish_trajectory(self):
-        """Publish joint trajectory message."""
+        """Publish joint trajectory message based on system state."""
         if self.is_emergency_stop:
-            return
-        
-        # Get current trajectory point
-        traj_point = self.get_current_trajectory_point()
-        if not traj_point:
             return
         
         # Create and populate trajectory message
         trajectory_msg = JointsTrajectory()
         trajectory_msg.header.stamp = rospy.Time.now()
         
-        # Right leg data (from JSON)
-        trajectory_msg.Rhip_pos_ref  = 0.1 #traj_point['right_leg_positions'][0]  # Hip position
-        trajectory_msg.Rknee_pos_ref = 0.1 #traj_point['right_leg_positions'][1]  # Knee position
-        trajectory_msg.Rhip_vel_ref  = 0.0 #traj_point['right_leg_velocities'][0]  # Hip velocity
-        trajectory_msg.Rknee_vel_ref = 0.0 #traj_point['right_leg_velocities'][1]  # Knee velocity
-        
-        # Left leg data (placeholder - same as right leg for now)
-        trajectory_msg.Lhip_pos_ref  = 0.1 # traj_point['left_leg_positions'][0]  # Hip position
-        trajectory_msg.Lknee_pos_ref = 0.1 # traj_point['left_leg_positions'][1]  # Knee position
-        trajectory_msg.Lhip_vel_ref  = 0.0 # traj_point['left_leg_velocities'][0]  # Hip velocity
-        trajectory_msg.Lknee_vel_ref = 0.0 # traj_point['left_leg_velocities'][1]  # Knee velocity
+        # Set values based on system state
+        if self.system_state == "READY":
+            # READY state: publish (0.0, 0.0, 0.0, 0.0) for all joints
+            trajectory_msg.Rhip_pos_ref  = 0.0
+            trajectory_msg.Rknee_pos_ref = 0.0
+            trajectory_msg.Rhip_vel_ref  = 0.0
+            trajectory_msg.Rknee_vel_ref = 0.0
+            trajectory_msg.Lhip_pos_ref  = 0.0
+            trajectory_msg.Lknee_pos_ref = 0.0
+            trajectory_msg.Lhip_vel_ref  = 0.0
+            trajectory_msg.Lknee_vel_ref = 0.0
+        elif self.system_state == "WALKING":
+            # WALKING state: publish actual trajectory values if available
+            if self.trajectory_active and self.trajectory_data and self.current_trajectory_index < self.trajectory_length:
+                # Get current trajectory point
+                current_pos = self.trajectory_data['positions'][self.current_trajectory_index]
+                current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
+                
+                # Right leg data from trajectory
+                trajectory_msg.Rhip_pos_ref  = current_pos[0]  # Hip position
+                trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
+                trajectory_msg.Rhip_vel_ref  = current_vel[0]  # Hip velocity
+                trajectory_msg.Rknee_vel_ref = current_vel[1]  # Knee velocity
+                
+                # Left leg data (mirror right leg for now, or use separate data if available)
+                trajectory_msg.Lhip_pos_ref  = current_pos[0]  # Mirror right hip
+                trajectory_msg.Lknee_pos_ref = current_pos[1]  # Mirror right knee
+                trajectory_msg.Lhip_vel_ref  = current_vel[0]  # Mirror right hip velocity
+                trajectory_msg.Lknee_vel_ref = current_vel[1]  # Mirror right knee velocity
+                
+                # Log trajectory progress occasionally
+                if self.current_trajectory_index % 50 == 0:
+                    hip_deg = math.degrees(current_pos[0])
+                    knee_deg = math.degrees(current_pos[1])
+                    rospy.loginfo(f"Publishing trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
+                                 f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
+            else:
+                # Fallback to safe values if no trajectory data
+                trajectory_msg.Rhip_pos_ref  = 0.1
+                trajectory_msg.Rknee_pos_ref = 0.1
+                trajectory_msg.Rhip_vel_ref  = 0.0
+                trajectory_msg.Rknee_vel_ref = 0.0
+                trajectory_msg.Lhip_pos_ref  = 0.1
+                trajectory_msg.Lknee_pos_ref = 0.1
+                trajectory_msg.Lhip_vel_ref  = 0.0
+                trajectory_msg.Lknee_vel_ref = 0.0
+        elif self.system_state == "STOPPING":
+            # STOPPING state: publish zeros for safety
+            trajectory_msg.Rhip_pos_ref  = 1.0
+            trajectory_msg.Rknee_pos_ref = 1.0
+            trajectory_msg.Rhip_vel_ref  = 0.0
+            trajectory_msg.Rknee_vel_ref = 0.0
+            trajectory_msg.Lhip_pos_ref  = 1.0
+            trajectory_msg.Lknee_pos_ref = 1.0
+            trajectory_msg.Lhip_vel_ref  = 0.0
+            trajectory_msg.Lknee_vel_ref = 0.0
+        else:
+            # All other states: publish zeros for safety
+            trajectory_msg.Rhip_pos_ref  = 0.0
+            trajectory_msg.Rknee_pos_ref = 0.0
+            trajectory_msg.Rhip_vel_ref  = 0.0
+            trajectory_msg.Rknee_vel_ref = 0.0
+            trajectory_msg.Lhip_pos_ref  = 0.0
+            trajectory_msg.Lknee_pos_ref = 0.0
+            trajectory_msg.Lhip_vel_ref  = 0.0
+            trajectory_msg.Lknee_vel_ref = 0.0
         
         # Publish trajectory
         self.joints_trajectory_pub.publish(trajectory_msg)
-        
-        # Log progress occasionally
-        if self.current_trajectory_index % 50 == 0:
-            hip_deg = math.degrees(traj_point['right_leg_positions'][0])
-            knee_deg = math.degrees(traj_point['right_leg_positions'][1])
-            rospy.loginfo(f"Trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
-                         f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
 
     def start_trajectory(self):
         """Start trajectory playback."""
@@ -495,20 +576,81 @@ class TrajectoryGeneratorNode:
         msg.header.stamp = rospy.Time.now()
         msg.trigger = True
         self.cycle_finished_pub.publish(msg)
-        rospy.loginfo("Cycle finished signal sent")
+        rospy.loginfo("t: Cycle finished signal sent")
+
+    def trigger_emergency_stop_and_shutdown(self, reason="Trajectory generator emergency"):
+        """Trigger emergency stop and shutdown the node."""
+        rospy.logerr(f"TRAJECTORY GENERATOR EMERGENCY: {reason}")
+        
+        # Set emergency stop flag
+        self.is_emergency_stop = True
+        self.trajectory_active = False
+        
+        # Send emergency stop message
+        e_stop_msg = EStopTrigger()
+        e_stop_msg.header.stamp = rospy.Time.now()
+        e_stop_msg.trigger = True
+        e_stop_msg.state = "TRAJECTORY_EMERGENCY"
+        self.e_stop_trigger_pub.publish(e_stop_msg)
+        
+        # Shutdown after brief delay
+        rospy.Timer(rospy.Duration(0.5), lambda event: rospy.signal_shutdown(reason), oneshot=True)
 
     def run(self):
         """Main execution loop."""
-        rospy.loginfo("Trajectory Generator Node running...")
-        
-        # Auto-start trajectory if data is available
-        if self.trajectory_data and not self.trajectory_active:
-            self.start_trajectory()
+        rospy.loginfo("t: Trajectory Generator Node running...")
         
         while not rospy.is_shutdown():
             try:
-                if self.trajectory_active and not self.is_emergency_stop:
-                    self.publish_trajectory()
+                # State-based logic following the emergency stop node state machine
+                if self.system_state == "INIT":
+                    # In INIT state - wait for system to be ready, don't publish
+                    rospy.loginfo_throttle(10, "t: Trajectory generator in INIT state - waiting")
+                    
+                elif self.system_state == "CALIBRATION_PROCESS":
+                    # In CALIBRATION_PROCESS state - wait for calibration to complete, don't publish
+                    rospy.loginfo_throttle(5, "t: Trajectory generator in CALIBRATION_PROCESS state - waiting")
+                    
+                elif self.system_state == "READY":
+                    # In READY state - publish zeros (0.0, 0.0, 0.0, 0.0), wait for WALKING state
+                    rospy.loginfo_throttle(10, "t: Trajectory generator READY - publishing zeros, waiting for WALKING state")
+                    if not self.is_emergency_stop:
+                        self.publish_trajectory()  # Publishes (0.0, 0.0, 0.0, 0.0) for READY state
+                    
+                elif self.system_state == "WALKING":
+                    # In WALKING state - now start trajectory and publish safe walking values
+                    if not self.is_emergency_stop:
+                        if not self.trajectory_active and self.trajectory_data:
+                            # Start trajectory when entering WALKING state
+                            self.start_trajectory()
+                            rospy.loginfo("t: Started trajectory for WALKING state")
+                        
+                        # Publish safe walking values (0.1, 0.1, 0.0, 0.0)
+                        self.publish_trajectory()
+                        
+                        # Advance trajectory index for actual trajectory processing (if needed in future)
+                        if self.trajectory_active:
+                            traj_point = self.get_current_trajectory_point()  # This advances the index
+                        
+                elif self.system_state == "STOPPING":
+                    # In STOPPING state - continue current trajectory until cycle ends
+                    if not self.is_emergency_stop:
+                        self.publish_trajectory()  # Publishes based on current state logic
+                        
+                        # Advance trajectory index to completion for cycle finished signal
+                        if self.trajectory_active:
+                            traj_point = self.get_current_trajectory_point()  # This will trigger cycle_finished
+                    else:
+                        # Trajectory finished, send cycle finished if not already sent
+                        rospy.loginfo_throttle(2, "t: Trajectory generator in STOPPING state - trajectory finished")
+                        
+                elif self.system_state == "E_STOP":
+                    # Emergency stop state - should not reach here as node will shutdown
+                    rospy.logerr("t: Trajectory generator in E_STOP state - shutting down")
+                    break
+                    
+                else:
+                    rospy.logwarn_throttle(5, f"t: Unknown system state: {self.system_state}")
                 
                 self.rate.sleep()
                 
@@ -516,9 +658,28 @@ class TrajectoryGeneratorNode:
                 rospy.logerr(f"Error in trajectory generator loop: {e}")
                 self.rate.sleep()
 
+    def shutdown(self):
+        """Clean shutdown method called on node shutdown."""
+        rospy.loginfo("t: Shutting down Trajectory Generator Node...")
+        
+        # Stop trajectory playback
+        self.trajectory_active = False
+        
+        # If emergency stop is not already active, send a clean shutdown signal
+        if not self.is_emergency_stop:
+            rospy.loginfo("t: Clean shutdown - trajectory generator stopping normally")
+        else:
+            rospy.loginfo("t: Emergency shutdown already performed")
+        
+        rospy.loginfo("t: Trajectory Generator Node shutdown complete")
+
 if __name__ == '__main__':
     try:
         node = TrajectoryGeneratorNode()
+        
+        # Register shutdown callback
+        rospy.on_shutdown(node.shutdown)
+        
         node.run()
     except rospy.ROSInterruptException:
         rospy.loginfo("Trajectory Generator Node shutdown")

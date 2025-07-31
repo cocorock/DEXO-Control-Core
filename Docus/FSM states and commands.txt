@@ -47,3 +47,57 @@ before starting the modification lets check if you understood me.
 
 
 rostopic pub /exoskeleton/cycle_finished exoskeleton_control/Trigger "trigger: true" --once
+
+
+
+Im running the @src/exoskeleton_control/launch/core_nodes_2motors.launch but i need to do some important modifications to           │
+│    synchronize the execution of the nodes envolved, @src/exoskeleton_control/scripts/motor_control_node_2motors.py                     │
+│    @src/exoskeleton_control/scripts/emergency_stop_node.py @src/exoskeleton_control/scripts/trajectory_generator_node.py, I need you   │
+│    to checout the run() routine of @src/exoskeleton_control/scripts/single_motor_control_node.py and implement it for the              │
+│    @src/exoskeleton_control/scripts/motor_control_node_2motors.py, also I need you to implement that logic to fuction with the other 2 │
+│     nodes involve. Please leave the following lines         # Right leg data (from JSON)                                               │
+│            trajectory_msg.Rhip_pos_ref  = 0.1 #traj_point['right_leg_positions'][0]  # Hip position                                    │
+│            trajectory_msg.Rknee_pos_ref = 0.1 #traj_point['right_leg_positions'][1]  # Knee position                                   │
+│            trajectory_msg.Rhip_vel_ref  = 0.0 #traj_point['right_leg_velocities'][0]  # Hip velocity                                   │
+│            trajectory_msg.Rknee_vel_ref = 0.0 #traj_point['right_leg_velocities'][1]  # Knee velocity                                  │
+│                                                                                                                                        │
+│            # Left leg data (placeholder - same as right leg for now)                                                                   │
+│            trajectory_msg.Lhip_pos_ref  = 0.1 # traj_point['left_leg_positions'][0]  # Hip position                                    │
+│            trajectory_msg.Lknee_pos_ref = 0.1 # traj_point['left_leg_positions'][1]  # Knee position                                   │
+│            trajectory_msg.Lhip_vel_ref  = 0.0 # traj_point['left_leg_velocities'][0]  # Hip velocity                                   │
+│            trajectory_msg.Lknee_vel_ref = 0.0 # traj_point['left_leg_velocities'][1]  # Knee velocity  of                              │
+│    @src/exoskeleton_control/scripts/trajectory_generator_node.py for now  to avoid accidents. Also here is the decription of the state │
+│     machine of the system:  States of the exoskeleton:                                                                                 │
+│    Init                                                                                                                                │
+│    Calibration_process                                                                                                                 │
+│    Ready                                                                                                                               │
+│    Walking                                                                                                                             │
+│    Stoping                                                                                                                             │
+│    E_stop                                                                                                                              │
+│                                                                                                                                        │
+│    State machine valid transitions:                                                                                                    │
+│                                                                                                                                        │
+│    a. Init -> Calibration_process:1.st_Calibration_trig (dummy_crutches_node)                                                          │
+│    b. Calibration_process -> Init:Failed_Calibration (motor_control_node)                                                              │
+│    c. Calibration_process -> Ready:Calibration_complete (motor_control_node)                                                           │
+│    d. Calibration_process -> E_stop:4.shutdown, E_stop (motor_control_node)                                                            │
+│    e. Ready -> Walking:2.st_walking_trig (dummy_crutches_node)                                                                         │
+│    f. Ready -> E_stop: 4.shutdown, E_stop (E_strop triggered by any node)                                                              │
+│    g. Walking -> Stoping:3.stop_trig (dummy_crutches_node)                                                                             │
+│    j. Walking -> E_stop:4.shutdown, E_stop (E_strop triggered by any node)                                                             │
+│    k. Stoping -> Ready:cycle_finished? (E_strop triggered by trajectory node)                                                          │
+│    h. Stoping -> E_stop:4.shutdown, E_stop (E_strop triggered by any node)                                                             │
+│    i. E_stop ->Shutdown:ROS shutdown                                                                                                   │
+│                                                                                                                                        │
+│    *each lines defines each of transitions of the FSM. The event in charge of triggering of the transition is described after the ':'  │
+│    with the node responsible or where the event occurs is inside parethesis.                                                           │
+│    The E_stop state is accesable via 4.shutdown or E_stop event in any node.                                                           │
+│    Every node should have the implemetation of rospy.on_shutdown() to shutdown and it should be call programatically when the          │
+│    emergency stop is reach in any node. Youd should also define new topics which use the EStopTrigger message for sending the          │
+│    emergency stop if it does not occurs in the emergency stop node, EStopTrigger should be sent triggering the callback and shuting    │
+│    down the system, if the EStopTrigger occurs in a node diferrent from the emergency stop node, it should call its own shutdown       │
+│    function after sending the EStopTrigger to the emergency stop node.                                                                 │
+│    You need to used the topic fsm_state to propagate/receive the state as to follow the logic, use the e_stop_trigger or               │
+│    emergency_stop only for sending the emergency stop and shutdown of the whole system. Please create a lis of the requirememts that i │
+│     gave so you can go cheking them out                                                                                                │
+╰─────────────────────────────────────────────

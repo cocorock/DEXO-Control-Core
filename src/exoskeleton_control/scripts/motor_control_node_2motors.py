@@ -187,6 +187,11 @@ class MotorControlNode:
         self.trajectory_active = False
         self.fsm_state = "INIT"  # Track emergency stop node FSM state
         
+        # System state tracking (synchronized with emergency stop node)
+        self.system_state = "INIT"  # Track emergency stop node state
+        self.previous_state = "INIT"
+        self.state_lock = threading.Lock()
+        
         # Initialize motor configurations from parameters
         self.setup_motor_configurations()
         
@@ -266,30 +271,36 @@ class MotorControlNode:
     def load_configuration(self):
         """Load configuration parameters from ROS parameter server."""
         try:
-            # Calibration parameters - only for 2 motors (right hip, right knee)
-            self.calibration_sequence = rospy.get_param('~calibration_sequence', [1, 2])
-            self.calibration_speed = math.radians(rospy.get_param('~calibration_speed_deg', 30.0))
-            self.max_calibration_time = rospy.get_param('~max_calibration_time', 30.0)
+            # Load calibration parameters from new structure
+            calibration_config = rospy.get_param('~calibration', {})
+            self.calibration_sequence = calibration_config.get('sequence', [1, 2])
+            self.calibration_speed = math.radians(calibration_config.get('speed_deg', 60.0))
+            self.max_calibration_time = calibration_config.get('max_time', 30.0)
+            self.torque_thresholds = calibration_config.get('torque_thresholds', [3.0, 1.0])
 
-            # Per-motor torque thresholds
-            self.torque_thresholds = rospy.get_param('~torque_thresholds', [3.0, 1.0])
-            
-            # Per-motor control gains
-            self.motor_gains_config = rospy.get_param('~motor_gains', [
-                # Default for motor 1 (right hip)
-                {'calibration': {'kp': 10.0, 'kd': 2.0}, 'hold': {'kp': 8.0, 'kd': 1.5}, 'trajectory': {'kp': 60.0, 'kd': 3.0}},
-                # Default for motor 2 (right knee)
-                {'calibration': {'kp': 15.0, 'kd': 1.0}, 'hold': {'kp': 5.0, 'kd': 1.0}, 'trajectory': {'kp': 40.0, 'kd': 2.0}}
-            ])
-
-            # Motor configurations - only 2 motors
+            # Load motor hardware configuration
+            motors_config = rospy.get_param('~motors', {})
             self.motor_config_params = {
-                'motor_ids': rospy.get_param('~motor_ids', [0x06, 0x08]),  # Right hip, Right knee
-                'joint_names': rospy.get_param('~joint_names', ["right_hip", "right_knee"]),
-                'motor_models': rospy.get_param('~motor_models', ["AK80_64", "AK80_8"]),
-                'angle_limits_deg': rospy.get_param('~angle_limits_deg', [[-45, 45], [-45, 4]]),
-                'motor_directions': rospy.get_param('~motor_directions', [1, 1])
+                'motor_ids': motors_config.get('ids', [0x06, 0x08]),
+                'joint_names': motors_config.get('joint_names', ["right_hip", "right_knee"]),
+                'motor_models': motors_config.get('models', ["AK80_64", "AK80_8"]),
+                'angle_limits_deg': motors_config.get('angle_limits_deg', [[-50, 90], [-100, 10]]),
+                'motor_directions': motors_config.get('directions', [1, 1])
             }
+
+            # Load control gains from new structure
+            control_gains_config = rospy.get_param('~control_gains', {})
+            right_hip_gains = control_gains_config.get('right_hip', {
+                'calibration': {'kp': 0.0, 'kd': 5.0},
+                'hold': {'kp': 2.0, 'kd': 1.5},
+                'trajectory': {'kp': 5.0, 'kd': 1.0}
+            })
+            right_knee_gains = control_gains_config.get('right_knee', {
+                'calibration': {'kp': 0.0, 'kd': 5.0},
+                'hold': {'kp': 2.0, 'kd': 1.5},
+                'trajectory': {'kp': 5.0, 'kd': 1.0}
+            })
+            self.motor_gains_config = [right_hip_gains, right_knee_gains]
 
             # CAN interface parameters
             self.can_bustype = rospy.get_param('~can_bustype', 'socketcan')
@@ -307,18 +318,16 @@ class MotorControlNode:
         """Set default configuration values if parameter loading fails."""
         # Calibration parameters
         self.calibration_sequence = [1, 2]
-        self.calibration_speed = math.radians(30.0)
+        self.calibration_speed = math.radians(60.0)
         self.max_calibration_time = 30.0
-
-        # Per-motor torque thresholds
-        self.torque_thresholds = [8.0, 5.0]
+        self.torque_thresholds = [3.0, 1.0]
         
         # Per-motor control gains
         self.motor_gains_config = [
             # Default for motor 1 (right hip)
-            {'calibration': {'kp': 10.0, 'kd': 2.0}, 'hold': {'kp': 8.0, 'kd': 1.5}, 'trajectory': {'kp': 60.0, 'kd': 3.0}},
+            {'calibration': {'kp': 0.0, 'kd': 5.0}, 'hold': {'kp': 2.0, 'kd': 1.5}, 'trajectory': {'kp': 5.0, 'kd': 1.0}},
             # Default for motor 2 (right knee)
-            {'calibration': {'kp': 15.0, 'kd': 1.0}, 'hold': {'kp': 5.0, 'kd': 1.0}, 'trajectory': {'kp': 40.0, 'kd': 2.0}}
+            {'calibration': {'kp': 0.0, 'kd': 5.0}, 'hold': {'kp': 2.0, 'kd': 1.5}, 'trajectory': {'kp': 5.0, 'kd': 1.0}}
         ]
 
         # Motor configurations - only 2 motors
@@ -326,7 +335,7 @@ class MotorControlNode:
             'motor_ids': [0x06, 0x08],  # Right hip, Right knee
             'joint_names': ["right_hip", "right_knee"],
             'motor_models': ["AK80_64", "AK80_8"],
-            'angle_limits_deg': [[-30, 90], [-100, 0]],
+            'angle_limits_deg': [[-50, 90], [-100, 10]],
             'motor_directions': [1, 1]
         }
 
@@ -489,6 +498,7 @@ class MotorControlNode:
         """Handle FSM state updates from emergency stop node."""
         rospy.loginfo_throttle(10.0, f"m: Received FSM state: {msg.state}")
         self.fsm_state = msg.state
+        self.handle_state_transition(msg.state)
 
     def calibration_trigger_callback(self, msg):
         """Handle calibration trigger."""
@@ -982,6 +992,23 @@ class MotorControlNode:
         except Exception as e:
             rospy.logerr(f"Error publishing torques: {e}")
 
+    def handle_state_transition(self, new_state):
+        """Handle state transitions and perform appropriate actions."""
+        with self.state_lock:
+            if self.previous_state == new_state:
+                return  # No state change
+                
+            rospy.loginfo(f"m: State transition: {self.previous_state} -> {new_state}")
+            
+            # Handle transitions based on current state machine logic
+            if new_state == "CALIBRATION_PROCESS" and self.previous_state == "INIT":
+                # Start calibration when entering CALIBRATION_PROCESS from INIT
+                if self.calibration_state == CalibrationState.NOT_STARTED:
+                    rospy.loginfo("m: Calibration will start on next cycle")
+                    
+            self.previous_state = self.system_state
+            self.system_state = new_state
+
     def run(self):
         """Main control loop running at 100Hz."""
         rospy.loginfo("m: Starting motor control loop...")
@@ -991,27 +1018,78 @@ class MotorControlNode:
             if self.is_emergency_stop:
                 rospy.loginfo("Emergency stop active - exiting control loop")
                 break
+            
+            # Get current system state (thread-safe)
+            with self.state_lock:
+                current_state = self.system_state
+                
             loop_start_time = time.time()
 
             try:
-                # Handle calibration state machine
-                if self.calibration_state not in [CalibrationState.NOT_STARTED, CalibrationState.COMPLETED]:
-                    self.update_calibration_state_machine()
-                    time.sleep(0.1)  # Slower rate during calibration
-                    continue
+                # State-based logic following the emergency stop node state machine
+                if current_state == "INIT":
+                    # In INIT state - wait for emergency stop node to transition to CALIBRATION_PROCESS
+                    rospy.loginfo_throttle(5, "m: Motor control in INIT state - waiting for calibration trigger from emergency stop")
+                    
+                elif current_state == "CALIBRATION_PROCESS":
+                    # Handle calibration state machine
+                    if self.calibration_state == CalibrationState.NOT_STARTED:
+                        # Trigger calibration when entering this state
+                        rospy.loginfo("m: Starting calibration process...")
+                        self.calibration_state = CalibrationState.CALIBRATING_R_HIP
+                    
+                    if self.calibration_state not in [CalibrationState.NOT_STARTED, CalibrationState.COMPLETED]:
+                        self.update_calibration_state_machine()
+                        time.sleep(0.1)  # Slower rate during calibration
+                        continue
+                        
+                elif current_state == "READY":
+                    self.debug_flag = False
+                    # In READY state - motors calibrated, waiting for walking command
+                    if self.calibration_state == CalibrationState.COMPLETED:
+                        rospy.loginfo_throttle(10, "m: Motor control READY - waiting for walking command from emergency stop")
+                        # Keep motors in hold mode and update states
+                        #self.calculate_feedforward_torques()
+                        self.send_motor_commands()  # Will send hold commands
+                    else:
+                        rospy.logwarn_throttle(5, "m: In READY state but calibration not completed")
+                        
+                elif current_state == "WALKING":
+                    self.debug_flag = True
+                    # In WALKING state - execute trajectory
+                    if self.calibration_state == CalibrationState.COMPLETED:
+                        # Step 1: Calculate feedforward torques (designed for <8ms)
+                        # self.calculate_feedforward_torques()
 
-                # Normal operation
-                if self.calibration_state == CalibrationState.COMPLETED:
-                    # Step 1: Calculate feedforward torques (designed for <8ms)
-                    self.calculate_feedforward_torques()
+                        # Step 2: Send motor commands (should take ~222μs for 2 motors)
+                        self.send_motor_commands()
+                    else:
+                        rospy.logerr("m: Cannot walk - calibration not completed")
+                        
+                elif current_state == "STOPPING":
+                    
+                    # In STOPPING state - continue current motion until trajectory ends
+                    if self.calibration_state == CalibrationState.COMPLETED:
+                        rospy.loginfo_throttle(2, "m: Motor control in STOPPING state - continuing current motion")
+                        # Continue executing trajectory until it naturally ends
+                        # self.calculate_feedforward_torques()
+                        self.send_motor_commands()
+                    else:
+                        rospy.logerr("m: Cannot execute stopping - calibration not completed")
+                        
+                elif current_state == "E_STOP":
+                    # Emergency stop state - should not reach here as node will shutdown
+                    rospy.logerr("m: Motor control in E_STOP state - shutting down")
+                    break
+                    
+                else:
+                    rospy.logwarn_throttle(5, f"m: Unknown system state: {current_state}")
 
-                    # Step 2: Send motor commands (should take ~222μs for 2 motors)
-                    self.send_motor_commands()
-
-                # Step 3: Publish topics
-                self.publish_exoskeleton_state()
-                self.publish_motor_status()
-                self.publish_torques()
+                # Always publish topics (unless emergency stopped)
+                if not self.is_emergency_stop:
+                    self.publish_exoskeleton_state()
+                    self.publish_motor_status()
+                    self.publish_torques()
 
                 # Check loop timing
                 loop_time = time.time() - loop_start_time
