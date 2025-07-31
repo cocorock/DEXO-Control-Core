@@ -31,12 +31,12 @@ control_gains:
   right_hip:
     calibration: {kp: 0.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 15.0, kd: 0.0}
+    trajectory:  {kp: 15.0, kd: 2.0}
   
   right_knee:
     calibration: {kp: 0.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 15.0, kd: 0.0}
+    trajectory:  {kp: 15.0, kd: 2.0}
 
 # =====================================================================
 # TRAJECTORY GENERATOR CONFIGURATION

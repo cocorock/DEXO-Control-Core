@@ -528,12 +528,12 @@ class TrajectoryGeneratorNode:
                 trajectory_msg.Lknee_vel_ref = 0.0
         elif self.system_state == "STOPPING":
             # STOPPING state: publish zeros for safety
-            trajectory_msg.Rhip_pos_ref  = 1.0
-            trajectory_msg.Rknee_pos_ref = 1.0
+            trajectory_msg.Rhip_pos_ref  = 0.0
+            trajectory_msg.Rknee_pos_ref = 0.0
             trajectory_msg.Rhip_vel_ref  = 0.0
             trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref  = 1.0
-            trajectory_msg.Lknee_pos_ref = 1.0
+            trajectory_msg.Lhip_pos_ref  = 0.0
+            trajectory_msg.Lknee_pos_ref = 0.0
             trajectory_msg.Lhip_vel_ref  = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
         else:

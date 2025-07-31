@@ -453,13 +453,15 @@ class MotorControlNode:
             return
 
         # Update desired positions and velocities for right leg only
-        if hasattr(msg, 'right_leg'):
-            if len(msg.right_leg.positions) >= 2:
-                self.desired_positions[0] = msg.right_leg.positions[0]  # R_hip
-                self.desired_positions[1] = msg.right_leg.positions[1]  # R_knee
-            if len(msg.right_leg.velocities) >= 2:
-                self.desired_velocities[0] = msg.right_leg.velocities[0]  # R_hip
-                self.desired_velocities[1] = msg.right_leg.velocities[1]  # R_knee
+        # Extract trajectory data from JointsTrajectory message fields
+        self.desired_positions[0] = msg.Rhip_pos_ref   # R_hip position
+        self.desired_positions[1] = msg.Rknee_pos_ref  # R_knee position
+        self.desired_velocities[0] = msg.Rhip_vel_ref  # R_hip velocity
+        self.desired_velocities[1] = msg.Rknee_vel_ref # R_knee velocity
+        
+        # Log trajectory data for debugging
+        if self.debug_flag:
+            rospy.loginfo_throttle(1.0, f"m: Received trajectory: hip_pos={msg.Rhip_pos_ref:.3f}, knee_pos={msg.Rknee_pos_ref:.3f}")
 
         # Enforce joint limits
         for i, motor_id in enumerate([1, 2]):
@@ -886,6 +888,12 @@ class MotorControlNode:
                             config.max_limit
                         )
                         
+                        # Debug logging for trajectory commands
+                        if self.debug_flag and motor_id == 1:  # Log for hip motor only to reduce spam
+                            rospy.loginfo_throttle(0.5, f"m: Sending trajectory cmd to motor {motor_id}: "
+                                                 f"pos={desired_pos:.3f} rad ({math.degrees(desired_pos):.1f}°), "
+                                                 f"vel={self.desired_velocities[i]:.3f}")
+                        
                         # Set impedance control parameters
                         state.p_in = desired_pos
                         state.v_in = self.desired_velocities[i] * config.direction  # Apply motor direction
@@ -908,6 +916,9 @@ class MotorControlNode:
                             rospy.logwarn_throttle(1.0, f"Failed to read response from motor {motor_id} after trajectory command")
                     else:
                         # Send zero torque if no active trajectory
+                        if self.debug_flag and motor_id == 1:  # Log for hip motor only
+                            rospy.loginfo_throttle(2.0, f"m: Motor {motor_id} in HOLD mode - trajectory_active={self.trajectory_active}, is_calibrated={config.is_calibrated}")
+                        
                         state.p_in = state.p_out  # Hold current position
                         state.v_in = 0.0
                         state.kp_in = config.gains['hold']['kp']
@@ -1044,7 +1055,6 @@ class MotorControlNode:
                         continue
                         
                 elif current_state == "READY":
-                    self.debug_flag = False
                     # In READY state - motors calibrated, waiting for walking command
                     if self.calibration_state == CalibrationState.COMPLETED:
                         rospy.loginfo_throttle(10, "m: Motor control READY - waiting for walking command from emergency stop")
@@ -1055,7 +1065,6 @@ class MotorControlNode:
                         rospy.logwarn_throttle(5, "m: In READY state but calibration not completed")
                         
                 elif current_state == "WALKING":
-                    self.debug_flag = True
                     # In WALKING state - execute trajectory
                     if self.calibration_state == CalibrationState.COMPLETED:
                         # Step 1: Calculate feedforward torques (designed for <8ms)
