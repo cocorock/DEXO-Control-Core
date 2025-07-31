@@ -178,7 +178,7 @@ class MotorControlNode:
         self.load_configuration()
         
         # Control parameters
-        self.control_frequency = 100.0  # Hz
+        self.control_frequency = 200.0  # Hz
         self.dt = 1.0 / self.control_frequency
         
         # State management
@@ -1021,7 +1021,7 @@ class MotorControlNode:
             self.system_state = new_state
 
     def run(self):
-        """Main control loop running at 100Hz."""
+        """Main control loop running at 200Hz."""
         rospy.loginfo("m: Starting motor control loop...")
 
         while not rospy.is_shutdown():
@@ -1067,7 +1067,7 @@ class MotorControlNode:
                 elif current_state == "WALKING":
                     # In WALKING state - execute trajectory
                     if self.calibration_state == CalibrationState.COMPLETED:
-                        # Step 1: Calculate feedforward torques (designed for <8ms)
+                        # Step 1: Calculate feedforward torques (designed for <4ms)
                         # self.calculate_feedforward_torques()
 
                         # Step 2: Send motor commands (should take ~222μs for 2 motors)
@@ -1102,7 +1102,7 @@ class MotorControlNode:
 
                 # Check loop timing
                 loop_time = time.time() - loop_start_time
-                if loop_time > 0.008:  # 8ms calculation budget exceeded
+                if loop_time > 0.004:  # 4ms calculation budget exceeded (200Hz = 5ms period)
                     rospy.logwarn(f"Control loop exceeded time budget: {loop_time*1000:.2f}ms")
 
             except Exception as e:

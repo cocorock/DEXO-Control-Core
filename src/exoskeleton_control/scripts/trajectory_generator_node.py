@@ -51,7 +51,7 @@ class TrajectoryGeneratorNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Control parameters
-            self.control_frequency = rospy.get_param('~control_frequency', 100)  # 100Hz to match motor control
+            self.control_frequency = rospy.get_param('~control_frequency', 200)  # 200Hz to match motor control
             
             # Arm/leg parameters
             self.L1 = rospy.get_param('~leg_parameters/L1', 0.44)  # Thigh length (m)
@@ -82,7 +82,7 @@ class TrajectoryGeneratorNode:
 
     def set_default_configuration(self):
         """Set default configuration values."""
-        self.control_frequency = 100
+        self.control_frequency = 200
         self.L1 = 0.44  # Thigh length
         self.L2 = 0.44  # Shin length
         self.theta1_min = math.radians(-30)
@@ -491,7 +491,7 @@ class TrajectoryGeneratorNode:
             trajectory_msg.Lknee_pos_ref = 0.0
             trajectory_msg.Lhip_vel_ref  = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
-        elif self.system_state == "WALKING":
+        elif (self.system_state == "WALKING" or self.system_state == "STOPPING"):
             # WALKING state: publish actual trajectory values if available
             if self.trajectory_active and self.trajectory_data and self.current_trajectory_index < self.trajectory_length:
                 # Get current trajectory point
@@ -526,16 +526,16 @@ class TrajectoryGeneratorNode:
                 trajectory_msg.Lknee_pos_ref = 0.1
                 trajectory_msg.Lhip_vel_ref  = 0.0
                 trajectory_msg.Lknee_vel_ref = 0.0
-        elif self.system_state == "STOPPING":
-            # STOPPING state: publish zeros for safety
-            trajectory_msg.Rhip_pos_ref  = 0.0
-            trajectory_msg.Rknee_pos_ref = 0.0
-            trajectory_msg.Rhip_vel_ref  = 0.0
-            trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref  = 0.0
-            trajectory_msg.Lknee_pos_ref = 0.0
-            trajectory_msg.Lhip_vel_ref  = 0.0
-            trajectory_msg.Lknee_vel_ref = 0.0
+        # elif self.system_state == "STOPPING":
+        #     # STOPPING state: publish zeros for safety
+        #     trajectory_msg.Rhip_pos_ref  = 0.0
+        #     trajectory_msg.Rknee_pos_ref = 0.0
+        #     trajectory_msg.Rhip_vel_ref  = 0.0
+        #     trajectory_msg.Rknee_vel_ref = 0.0
+        #     trajectory_msg.Lhip_pos_ref  = 0.0
+        #     trajectory_msg.Lknee_pos_ref = 0.0
+        #     trajectory_msg.Lhip_vel_ref  = 0.0
+        #     trajectory_msg.Lknee_vel_ref = 0.0
         else:
             # All other states: publish zeros for safety
             trajectory_msg.Rhip_pos_ref  = 0.0
