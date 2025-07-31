@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   EStopTrigger.msg
+  FSMState.msg
   Trigger.msg
   CrutchCommand.msg
   GaitParams.msg

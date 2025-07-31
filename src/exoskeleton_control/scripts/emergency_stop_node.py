@@ -5,7 +5,7 @@ import smach
 import smach_ros
 import threading
 import time
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger, ExoskeletonState, CrutchCommand
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger, ExoskeletonState, CrutchCommand, FSMState
 
 class SystemStates:
     """System state constants"""
@@ -53,13 +53,14 @@ class EmergencyStopNode:
         
         # Publishers
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
+        self.fsm_state_pub = rospy.Publisher('fsm_state', FSMState, queue_size=1)
         self.calibration_trigger_pub = rospy.Publisher('calibration_trigger_fw', Trigger, queue_size=1)
         self.walking_trigger_pub = rospy.Publisher('walking_trigger', Trigger, queue_size=1)
         self.stopping_trigger_pub = rospy.Publisher('stopping_trigger', Trigger, queue_size=1)
         self.system_state_pub = rospy.Publisher('system_state', Trigger, queue_size=1)
         
-        # Timer for periodic state publishing
-        self.state_publish_timer = rospy.Timer(rospy.Duration(0.1), self.publish_state_periodically)
+        # Timer for periodic FSM state publishing
+        self.fsm_state_publish_timer = rospy.Timer(rospy.Duration(0.1), self.publish_fsm_state_periodically)
         
         # Create SMACH state machine
         self.create_state_machine()
@@ -77,8 +78,8 @@ class EmergencyStopNode:
         # Monitoring timer
         self.monitor_timer = rospy.Timer(rospy.Duration(1.0 / self.monitor_frequency), self.monitor_callback)
         
-        rospy.loginfo("Emergency Stop Node initialized")
-        rospy.loginfo(f"Configuration: max_temp={self.max_motor_temperature}°C, "
+        rospy.loginfo("e: Emergency Stop Node initialized")
+        rospy.loginfo(f"e: Configuration: max_temp={self.max_motor_temperature}°C, "
                      f"timeout={self.communication_timeout}s, "
                      f"monitor_freq={self.monitor_frequency}Hz")
 
@@ -105,7 +106,7 @@ class EmergencyStopNode:
             self.stop_on_communication_loss = rospy.get_param('~emergency/stop_on_communication_loss', True)
             self.stop_on_temperature = rospy.get_param('~emergency/stop_on_temperature', True)
             
-            rospy.loginfo("Emergency stop configuration loaded successfully")
+            rospy.loginfo("e: Emergency stop configuration loaded successfully")
             
         except Exception as e:
             rospy.logerr(f"Error loading configuration: {e}")
@@ -218,13 +219,13 @@ class EmergencyStopNode:
         """Handle crutch commands from dummy_crutches_node."""
         with self.state_lock:
             if msg.command == CrutchCommand.ST_CALIBRATION_TRIG:
-                rospy.loginfo("Crutch command: Start calibration")
+                rospy.loginfo("e: Crutch command: Start calibration")
                 self.st_calibration_trig = True
             elif msg.command == CrutchCommand.ST_WALKING_TRIG:
-                rospy.loginfo("Crutch command: Start walking")
+                rospy.loginfo("e: Crutch command: Start walking")
                 self.st_walking_trig = True
             elif msg.command == CrutchCommand.STOP_TRIG:
-                rospy.loginfo("Crutch command: Stop")
+                rospy.loginfo("e: Crutch command: Stop")
                 self.stop_trig = True
             elif msg.command == CrutchCommand.SHUTDOWN:
                 rospy.logwarn("Crutch command: Emergency shutdown")
@@ -238,7 +239,7 @@ class EmergencyStopNode:
     def cycle_finished_callback(self, msg):
         """Handle cycle finished signal from trajectory generator."""
         if msg.trigger:
-            rospy.loginfo("Cycle finished signal received")
+            rospy.loginfo("e: Cycle finished signal received")
             with self.state_lock:
                 self.cycle_finished = True
 
@@ -297,12 +298,7 @@ class EmergencyStopNode:
                 self.current_state = SystemStates.E_STOP
                 
                 # Publish emergency stop message
-                e_stop_msg = EStopTrigger()
-                e_stop_msg.header.stamp = rospy.Time.now()
-                e_stop_msg.trigger = True
-                e_stop_msg.state = self.current_state
-                
-                self.e_stop_trigger_pub.publish(e_stop_msg)
+                self.publish_emergency_stop()
                 
                 # Schedule shutdown after a brief delay to ensure message is sent
                 def delayed_shutdown():
@@ -322,39 +318,41 @@ class EmergencyStopNode:
                 rospy.loginfo(f"Emergency stop cleared: {reason}")
                 
                 # Publish clear message
-                e_stop_msg = EStopTrigger()
-                e_stop_msg.header.stamp = rospy.Time.now()
-                e_stop_msg.trigger = False
-                e_stop_msg.state = self.current_state
+                self.publish_emergency_stop()
                 
-                self.e_stop_trigger_pub.publish(e_stop_msg)
-                
-    def publish_current_state(self):
-        """Publish current system state to motor control nodes."""
+    def publish_fsm_state(self):
+        """Publish current FSM state to other nodes."""
+        fsm_msg = FSMState()
+        fsm_msg.header.stamp = rospy.Time.now()
+        fsm_msg.state = self.current_state
+        self.fsm_state_pub.publish(fsm_msg)
+        
+    def publish_emergency_stop(self):
+        """Publish emergency stop trigger when needed."""
         e_stop_msg = EStopTrigger()
         e_stop_msg.header.stamp = rospy.Time.now()
         e_stop_msg.trigger = self.emergency_active
         e_stop_msg.state = self.current_state
         self.e_stop_trigger_pub.publish(e_stop_msg)
         
-    def publish_state_periodically(self, event):
-        """Periodically publish state for motor control nodes."""
+    def publish_fsm_state_periodically(self, event):
+        """Periodically publish FSM state for other nodes."""
         if not rospy.is_shutdown():
-            self.publish_current_state()
+            self.publish_fsm_state()
 
     def update_state(self, new_state):
         """Update current system state."""
         with self.state_lock:
             if self.current_state != new_state:
-                rospy.loginfo(f"State transition: {self.current_state} -> {new_state}")
+                rospy.loginfo(f"e: State transition: {self.current_state} -> {new_state}")
                 old_state = self.current_state
                 self.current_state = new_state
                 
                 # Send appropriate triggers to motor control nodes
                 self.send_state_triggers(old_state, new_state)
                 
-                # Always publish current state for motor control nodes
-                self.publish_current_state()
+                # Always publish FSM state for other nodes
+                self.publish_fsm_state()
 
     def send_walking_trigger(self):
         """Send walking trigger to motor control nodes."""
@@ -410,9 +408,9 @@ class EmergencyStopNode:
         if hasattr(self, 'monitor_timer'):
             self.monitor_timer.shutdown()
             
-        # Stop state publish timer
-        if hasattr(self, 'state_publish_timer'):
-            self.state_publish_timer.shutdown()
+        # Stop FSM state publish timer
+        if hasattr(self, 'fsm_state_publish_timer'):
+            self.fsm_state_publish_timer.shutdown()
         
         # Cleanup SMACH introspection
         if hasattr(self, 'sis'):
@@ -422,7 +420,7 @@ class EmergencyStopNode:
 
     def run(self):
         """Main execution method."""
-        rospy.loginfo("Starting Emergency Stop Node...")
+        rospy.loginfo("e: Starting Emergency Stop Node...")
         
         # Register shutdown handler
         rospy.on_shutdown(self.shutdown)
@@ -443,13 +441,13 @@ class InitState(smach.State):
     
     def execute(self, userdata):
         self.node.update_state(SystemStates.INIT)
-        rospy.loginfo('System in INIT state - waiting for calibration')
+        rospy.loginfo('e: System in INIT state - waiting for calibration')
         
         rate = rospy.Rate(10)  # 10 Hz
         while not rospy.is_shutdown():
             with self.node.state_lock:
                 if self.node.st_calibration_trig:
-                    rospy.loginfo('Calibration trigger received - starting calibration')
+                    rospy.loginfo('e: Calibration trigger received - starting calibration')
                     self.node.st_calibration_trig = False  # Reset trigger
                     return 'calibration_process'
                     
@@ -469,14 +467,14 @@ class CalibrationProcessState(smach.State):
     
     def execute(self, userdata):
         self.node.update_state(SystemStates.CALIBRATION_PROCESS)
-        rospy.loginfo('System in CALIBRATION_PROCESS state')
+        rospy.loginfo('e: System in CALIBRATION_PROCESS state')
         
         # Send calibration trigger once
         calibration_msg = Trigger()
         calibration_msg.header.stamp = rospy.Time.now()
         calibration_msg.trigger = True
         self.node.calibration_trigger_pub.publish(calibration_msg)
-        rospy.loginfo('Calibration trigger sent to motor control node')
+        rospy.loginfo('e: Calibration trigger sent to motor control node')
 
         rate = rospy.Rate(10)  # 10 Hz
         calibration_start_time = rospy.Time.now()
@@ -495,7 +493,7 @@ class CalibrationProcessState(smach.State):
                     
                 # Check for calibration completion
                 if self.node.calibration_complete:
-                    rospy.loginfo("Calibration completed successfully")
+                    rospy.loginfo("e: Calibration completed successfully")
                     return 'ready'
                     
                 # Check for shutdown command or emergency
@@ -521,7 +519,7 @@ class ReadyState(smach.State):
     
     def execute(self, userdata):
         self.node.update_state(SystemStates.READY)
-        rospy.loginfo('System READY for operation')
+        rospy.loginfo('e: System READY for operation')
         
         # Clear any previous emergency stop
         self.node.clear_emergency_stop("System ready")
@@ -531,7 +529,7 @@ class ReadyState(smach.State):
             with self.node.state_lock:
                 # Check for walking trigger
                 if self.node.st_walking_trig:
-                    rospy.loginfo('Walking trigger received')
+                    rospy.loginfo('e: Walking trigger received')
                     self.node.st_walking_trig = False  # Reset trigger
                     return 'walking'
                     
@@ -552,7 +550,7 @@ class WalkingState(smach.State):
     
     def execute(self, userdata):
         self.node.update_state(SystemStates.WALKING)
-        rospy.loginfo('System WALKING - active gait execution')
+        rospy.loginfo('e: System WALKING - active gait execution')
         
         rate = rospy.Rate(10)  # 10 Hz
         
@@ -560,7 +558,7 @@ class WalkingState(smach.State):
             with self.node.state_lock:
                 # Check for stop trigger
                 if self.node.stop_trig:
-                    rospy.loginfo('Stop trigger received - transitioning to stopping')
+                    rospy.loginfo('e: Stop trigger received - transitioning to stopping')
                     self.node.stop_trig = False  # Reset trigger
                     return 'stopping'
                     
@@ -581,7 +579,7 @@ class StoppingState(smach.State):
     
     def execute(self, userdata):
         self.node.update_state(SystemStates.STOPPING)
-        rospy.loginfo('System STOPPING - waiting for cycle completion')
+        rospy.loginfo('e: System STOPPING - waiting for cycle completion')
         
         rate = rospy.Rate(10)  # 10 Hz
         
@@ -589,7 +587,7 @@ class StoppingState(smach.State):
             with self.node.state_lock:
                 # Check for cycle finished signal
                 if self.node.cycle_finished:
-                    rospy.loginfo('Cycle finished - returning to ready')
+                    rospy.loginfo('e: Cycle finished - returning to ready')
                     self.node.cycle_finished = False  # Reset flag
                     return 'ready'
                     

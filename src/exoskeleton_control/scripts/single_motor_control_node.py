@@ -6,7 +6,7 @@ import threading
 import time
 import math
 from enum import Enum
-from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger
+from exoskeleton_control.msg import MotorStatus, EStopTrigger, Trigger, FSMState
 import mit_motor_controller as motor_driver
 import can
 
@@ -79,7 +79,7 @@ class SingleMotorControlNode:
         # self.generate_trajectory()
 
         rospy.Subscriber('e_stop_trigger', EStopTrigger, self.e_stop_callback)
-        rospy.Subscriber('system_state', Trigger, self.system_state_callback)
+        rospy.Subscriber('fsm_state', FSMState, self.fsm_state_callback)
 
         self.motor_status_pub = rospy.Publisher('Motor_Status', MotorStatus, queue_size=1)
         self.e_stop_trigger_pub = rospy.Publisher('e_stop_trigger', EStopTrigger, queue_size=1)
@@ -94,7 +94,7 @@ class SingleMotorControlNode:
     def load_configuration(self):
         """Load configuration for a single motor."""
         try:
-            self.torque_threshold = rospy.get_param('~torque_threshold', 8.0)
+            self.torque_threshold = rospy.get_param('~torque_threshold', 1.0)
             self.calibration_speed = math.radians(rospy.get_param('~calibration_speed_deg', 30.0))
             self.max_calibration_time = rospy.get_param('~max_calibration_time', 30.0)
 
@@ -117,7 +117,19 @@ class SingleMotorControlNode:
             self.can_channel = rospy.get_param('~can_channel', 'can0')
             self.can_bitrate = rospy.get_param('~can_bitrate', 1000000)
 
-            rospy.loginfo("Configuration loaded.")
+            rospy.loginfo("Configuration loaded successfully:")
+            rospy.loginfo(f"  Torque threshold: {self.torque_threshold} Nm")
+            rospy.loginfo(f"  Calibration speed: {math.degrees(self.calibration_speed):.1f} deg/s")
+            rospy.loginfo(f"  Max calibration time: {self.max_calibration_time} s")
+            rospy.loginfo(f"  Control gains - Calibration: kp={self.gains['calibration']['kp']}, kd={self.gains['calibration']['kd']}")
+            rospy.loginfo(f"  Control gains - Trajectory: kp={self.gains['trajectory']['kp']}, kd={self.gains['trajectory']['kd']}")
+            rospy.loginfo(f"  Motor ID: {self.motor_config_params['motor_id']}")
+            rospy.loginfo(f"  Controller ID: 0x{self.motor_config_params['controller_id']:02X}")
+            rospy.loginfo(f"  Joint name: {self.motor_config_params['joint_name']}")
+            rospy.loginfo(f"  Motor model: {self.motor_config_params['motor_model']}")
+            rospy.loginfo(f"  Angle limits: {self.motor_config_params['angle_limits_deg']} deg")
+            rospy.loginfo(f"  Motor direction: {self.motor_config_params['motor_direction']}")
+            rospy.loginfo(f"  CAN interface: {self.can_bustype}, {self.can_channel}, {self.can_bitrate} bps")
         except Exception as e:
             rospy.logerr(f"Error loading configuration: {e}")
             rospy.signal_shutdown("Configuration error")
@@ -186,11 +198,12 @@ class SingleMotorControlNode:
         rospy.loginfo(f"Generated trajectory with {len(self.trajectory)} points.")
 
     def e_stop_callback(self, msg):
+        """Handle emergency stop signals only."""
         if msg.trigger:
             with self.state_lock:
                 self.is_emergency_stop = True
                 self.system_state = "E_STOP"
-            rospy.logwarn("Emergency stop triggered - initiating shutdown sequence")
+            rospy.logwarn("s: Emergency stop triggered - initiating shutdown sequence")
             
             # Stop the motor immediately
             self.emergency_stop_motor()
@@ -206,19 +219,11 @@ class SingleMotorControlNode:
             rospy.signal_shutdown("Emergency stop triggered")
         else:
             self.is_emergency_stop = False
-            # Update system state from message if available
-            if hasattr(msg, 'state'):
-                self.handle_state_transition(msg.state)
 
-
-
-
-    def system_state_callback(self, msg):
-        """Handle system state updates from emergency stop node."""
-        # For now, we'll monitor emergency stop node's published states via logs
-        # and track state through the emergency stop trigger message
-        rospy.loginfo("System state update received from emergency stop node")
-
+    def fsm_state_callback(self, msg):
+        """Handle FSM state updates from emergency stop node."""
+        rospy.loginfo_throttle(10.0, f"s: Received FSM state: {msg.state}")
+        self.handle_state_transition(msg.state)
 
     def perform_calibration(self):
         """Complete calibration process including motor setup and limit detection"""
