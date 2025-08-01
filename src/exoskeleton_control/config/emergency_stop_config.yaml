@@ -2,8 +2,8 @@
 # Configuration for safety monitoring and emergency stop system
 
 # Monitoring Parameters
-monitor_frequency: 10.0        # Hz - How often to check system health
-communication_timeout: 5.0     # seconds - Max time without motor status updates (increased for calibration)
+monitor_frequency: 50.0        # Hz - How often to check system health
+communication_timeout: 2.0     # seconds - Max time without motor status updates
 
 # Safety Thresholds
 safety:
@@ -83,7 +83,7 @@ node_integration:
   
 # Message Publishing
 publishing:
-  estop_publish_rate: 20.0          # Hz - Rate to publish e-stop status
+  estop_publish_rate: 50.0          # Hz - Rate to publish e-stop status
   status_publish_rate: 5.0          # Hz - Rate to publish system status
   queue_size: 10                    # Queue size for published messages
 

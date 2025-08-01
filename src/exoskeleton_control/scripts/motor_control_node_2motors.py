@@ -1114,27 +1114,24 @@ class MotorControlNode:
         """Clean shutdown of motors."""
         rospy.loginfo("Shutting down motor control node...")
         
-        # Only perform shutdown if emergency shutdown hasn't already been done
+        # Send zero torque to all motors if not already done
         if not self.is_emergency_stop:
-            # Send zero torque to all motors
             self.emergency_stop_motors()
 
-            # Exit MIT mode for all motors
-            try:
-                for motor_id, controller in self.motor_controllers.items():
-                    motor_driver.exit_mode(self.can_channel, controller.controller_id)
-                    time.sleep(0.1)
-                    # Read response after exiting mode
-                    motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
-                                                 max_attempts=1, timeout_ms=10, debug_flag=self.debug_flag)
-            except Exception as e:
-                rospy.logerr(f"Error during shutdown: {e}")
+        # Always exit MIT mode for all motors regardless of emergency stop state
+        try:
+            for motor_id, controller in self.motor_controllers.items():
+                motor_driver.exit_mode(self.can_channel, controller.controller_id)
+                time.sleep(0.1)
+                # Read response after exiting mode
+                motor_driver.read_motor_status(self.can_channel, controller, self.motor_states[motor_id], 
+                                             max_attempts=1, timeout_ms=50, debug_flag=self.debug_flag)
+        except Exception as e:
+            rospy.logerr(f"Error during shutdown: {e}")
 
-            # Close CAN interface
-            if self.can_channel:
-                self.can_channel.shutdown()
-        else:
-            rospy.loginfo("Emergency shutdown already performed - skipping redundant shutdown")
+        # Close CAN interface
+        if self.can_channel:
+            self.can_channel.shutdown()
         
         rospy.loginfo("Motor control node shutdown complete")
 

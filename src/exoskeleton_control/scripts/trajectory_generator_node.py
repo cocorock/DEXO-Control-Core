@@ -450,18 +450,22 @@ class TrajectoryGeneratorNode:
         # Advance index
         self.current_trajectory_index += 1
         
-        # Handle looping
+        # Handle end of trajectory based on current state
         if self.current_trajectory_index >= self.trajectory_length:
-            if self.loop_trajectory and self.system_state == "WALKING":
+            if self.system_state == "WALKING" and self.loop_trajectory:
+                # In WALKING state with looping enabled: restart trajectory
                 self.current_trajectory_index = 0
-                rospy.loginfo("t: Trajectory loop completed, restarting")
-            else:
-                rospy.loginfo("t: =======================================================================================================================================Trajectory completed")
+                rospy.loginfo("t: Trajectory loop completed in WALKING state, restarting")
+            elif self.system_state == "STOPPING":
+                # In STOPPING state: trajectory completed, send cycle finished signal
+                rospy.loginfo("t: Trajectory completed in STOPPING state")
                 self.trajectory_active = False
-                # Send cycle finished signal if in STOPPING state
-                if self.system_state == "STOPPING":
-                    self.send_cycle_finished()
-                    rospy.loginfo("t: Sent cycle finished signal for STOPPING state")
+                self.send_cycle_finished()
+                rospy.loginfo("t: Sent cycle finished signal - emergency stop node should transition to READY")
+            else:
+                # Other states or non-looping WALKING: stop trajectory
+                rospy.loginfo("t: Trajectory completed")
+                self.trajectory_active = False
         
         return {
             'time': current_time,
@@ -480,18 +484,25 @@ class TrajectoryGeneratorNode:
         trajectory_msg = JointsTrajectory()
         trajectory_msg.header.stamp = rospy.Time.now()
         
+        # Get first trajectory position for READY and other states
+        first_pos = [0.0, 0.0]  # Default values
+        first_vel = [0.0, 0.0]  # Default velocities (always zero for READY)
+        if self.trajectory_data and len(self.trajectory_data['positions']) > 0:
+            first_pos = self.trajectory_data['positions'][0]
+            # Keep velocities at zero for READY state for safety
+        
         # Set values based on system state
         if self.system_state == "READY":
-            # READY state: publish (0.0, 0.0, 0.0, 0.0) for all joints
-            trajectory_msg.Rhip_pos_ref  = 0.0
-            trajectory_msg.Rknee_pos_ref = 0.0
-            trajectory_msg.Rhip_vel_ref  = 0.0
-            trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref  = 0.0
-            trajectory_msg.Lknee_pos_ref = 0.0
-            trajectory_msg.Lhip_vel_ref  = 0.0
-            trajectory_msg.Lknee_vel_ref = 0.0
-        elif (self.system_state == "WALKING" or self.system_state == "STOPPING"):
+            # READY state: publish first trajectory position with zero velocities
+            trajectory_msg.Rhip_pos_ref  = first_pos[0]
+            trajectory_msg.Rknee_pos_ref = first_pos[1]
+            trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity for safety
+            trajectory_msg.Rknee_vel_ref = 0.0  # Zero velocity for safety
+            trajectory_msg.Lhip_pos_ref  = first_pos[0]  # Mirror right leg
+            trajectory_msg.Lknee_pos_ref = first_pos[1]  # Mirror right leg
+            trajectory_msg.Lhip_vel_ref  = 0.0   # Zero velocity for safety
+            trajectory_msg.Lknee_vel_ref = 0.0   # Zero velocity for safety
+        elif self.system_state == "WALKING":
             # WALKING state: publish actual trajectory values if available
             if self.trajectory_active and self.trajectory_data and self.current_trajectory_index < self.trajectory_length:
                 # Get current trajectory point
@@ -517,33 +528,58 @@ class TrajectoryGeneratorNode:
                     rospy.loginfo(f"Publishing trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
-                # Fallback to safe values if no trajectory data
-                trajectory_msg.Rhip_pos_ref  = 0.1
-                trajectory_msg.Rknee_pos_ref = 0.1
+                # Fallback to first trajectory position if no active trajectory
+                trajectory_msg.Rhip_pos_ref  = first_pos[0]
+                trajectory_msg.Rknee_pos_ref = first_pos[1]
                 trajectory_msg.Rhip_vel_ref  = 0.0
                 trajectory_msg.Rknee_vel_ref = 0.0
-                trajectory_msg.Lhip_pos_ref  = 0.1
-                trajectory_msg.Lknee_pos_ref = 0.1
+                trajectory_msg.Lhip_pos_ref  = first_pos[0]
+                trajectory_msg.Lknee_pos_ref = first_pos[1]
                 trajectory_msg.Lhip_vel_ref  = 0.0
                 trajectory_msg.Lknee_vel_ref = 0.0
-        # elif self.system_state == "STOPPING":
-        #     # STOPPING state: publish zeros for safety
-        #     trajectory_msg.Rhip_pos_ref  = 0.0
-        #     trajectory_msg.Rknee_pos_ref = 0.0
-        #     trajectory_msg.Rhip_vel_ref  = 0.0
-        #     trajectory_msg.Rknee_vel_ref = 0.0
-        #     trajectory_msg.Lhip_pos_ref  = 0.0
-        #     trajectory_msg.Lknee_pos_ref = 0.0
-        #     trajectory_msg.Lhip_vel_ref  = 0.0
-        #     trajectory_msg.Lknee_vel_ref = 0.0
+        elif self.system_state == "STOPPING":
+            # STOPPING state: continue trajectory until end cycle, then signal completion
+            if self.trajectory_active and self.trajectory_data and self.current_trajectory_index < self.trajectory_length:
+                # Get current trajectory point - same as WALKING
+                current_pos = self.trajectory_data['positions'][self.current_trajectory_index]
+                current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
+                
+                # Right leg data from trajectory
+                trajectory_msg.Rhip_pos_ref  = current_pos[0]  # Hip position
+                trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
+                trajectory_msg.Rhip_vel_ref  = current_vel[0]  # Hip velocity
+                trajectory_msg.Rknee_vel_ref = current_vel[1]  # Knee velocity
+                
+                # Left leg data (mirror right leg for now, or use separate data if available)
+                trajectory_msg.Lhip_pos_ref  = current_pos[0]  # Mirror right hip
+                trajectory_msg.Lknee_pos_ref = current_pos[1]  # Mirror right knee
+                trajectory_msg.Lhip_vel_ref  = current_vel[0]  # Mirror right hip velocity
+                trajectory_msg.Lknee_vel_ref = current_vel[1]  # Mirror right knee velocity
+                
+                # Log stopping progress occasionally
+                if self.current_trajectory_index % 50 == 0:
+                    hip_deg = math.degrees(current_pos[0])
+                    knee_deg = math.degrees(current_pos[1])
+                    rospy.loginfo(f"STOPPING - trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
+                                 f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
+            else:
+                # Trajectory finished in STOPPING state - use first position until state change
+                trajectory_msg.Rhip_pos_ref  = first_pos[0]
+                trajectory_msg.Rknee_pos_ref = first_pos[1]
+                trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity when stopped
+                trajectory_msg.Rknee_vel_ref = 0.0  # Zero velocity when stopped
+                trajectory_msg.Lhip_pos_ref  = first_pos[0]
+                trajectory_msg.Lknee_pos_ref = first_pos[1]
+                trajectory_msg.Lhip_vel_ref  = 0.0   # Zero velocity when stopped
+                trajectory_msg.Lknee_vel_ref = 0.0   # Zero velocity when stopped
         else:
-            # All other states: publish zeros for safety
-            trajectory_msg.Rhip_pos_ref  = 0.0
-            trajectory_msg.Rknee_pos_ref = 0.0
+            # All other states (INIT, CALIBRATION_PROCESS, E_STOP): use same as READY
+            trajectory_msg.Rhip_pos_ref  = first_pos[0]
+            trajectory_msg.Rknee_pos_ref = first_pos[1]
             trajectory_msg.Rhip_vel_ref  = 0.0
             trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref  = 0.0
-            trajectory_msg.Lknee_pos_ref = 0.0
+            trajectory_msg.Lhip_pos_ref  = first_pos[0]
+            trajectory_msg.Lknee_pos_ref = first_pos[1]
             trajectory_msg.Lhip_vel_ref  = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
         
@@ -635,14 +671,14 @@ class TrajectoryGeneratorNode:
                 elif self.system_state == "STOPPING":
                     # In STOPPING state - continue current trajectory until cycle ends
                     if not self.is_emergency_stop:
-                        self.publish_trajectory()  # Publishes based on current state logic
+                        self.publish_trajectory()  # Publishes current trajectory values or first position when done
                         
                         # Advance trajectory index to completion for cycle finished signal
                         if self.trajectory_active:
-                            traj_point = self.get_current_trajectory_point()  # This will trigger cycle_finished
-                    else:
-                        # Trajectory finished, send cycle finished if not already sent
-                        rospy.loginfo_throttle(2, "t: Trajectory generator in STOPPING state - trajectory finished")
+                            traj_point = self.get_current_trajectory_point()  # This will trigger cycle_finished when trajectory ends
+                        else:
+                            # Trajectory already finished, continue publishing first position
+                            rospy.loginfo_throttle(5, "t: STOPPING state - trajectory finished, publishing first position until state change")
                         
                 elif self.system_state == "E_STOP":
                     # Emergency stop state - should not reach here as node will shutdown

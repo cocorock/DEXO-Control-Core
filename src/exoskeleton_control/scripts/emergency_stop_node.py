@@ -61,8 +61,8 @@ class EmergencyStopNode:
         self.stopping_trigger_pub = rospy.Publisher('stopping_trigger', Trigger, queue_size=1)
         self.system_state_pub = rospy.Publisher('system_state', Trigger, queue_size=1)
         
-        # Timer for periodic FSM state publishing
-        self.fsm_state_publish_timer = rospy.Timer(rospy.Duration(0.1), self.publish_fsm_state_periodically)
+        # Timer for periodic FSM state publishing at 50 Hz
+        self.fsm_state_publish_timer = rospy.Timer(rospy.Duration(1.0/50.0), self.publish_fsm_state_periodically)
         
         # Create SMACH state machine
         self.create_state_machine()
@@ -89,7 +89,7 @@ class EmergencyStopNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Monitoring parameters
-            self.monitor_frequency = rospy.get_param('~monitor_frequency', 10.0)  # Hz
+            self.monitor_frequency = rospy.get_param('~monitor_frequency', 50.0)  # Hz
             self.communication_timeout = rospy.get_param('~communication_timeout', 2.0)  # seconds
             
             # Safety thresholds
@@ -116,7 +116,7 @@ class EmergencyStopNode:
 
     def set_default_configuration(self):
         """Set default configuration values."""
-        self.monitor_frequency = 10.0
+        self.monitor_frequency = 50.0
         self.communication_timeout = 2.0
         self.max_motor_temperature = 80.0
         self.max_torque_error = 50.0
@@ -212,7 +212,13 @@ class EmergencyStopNode:
             # Check for calibration failure
             if hasattr(msg, 'calibration_failed'):
                 self.calibration_failed = any(msg.calibration_failed)
+            
+            # Always update last motor update time when receiving valid motor status
             self.last_motor_update = current_time
+            
+            # Clear the calibration finished flag if it exists (motor status received)
+            if hasattr(self, '_just_finished_calibration'):
+                delattr(self, '_just_finished_calibration')
             
             # Check for immediate safety issues
             self.check_motor_safety(msg)
@@ -296,8 +302,15 @@ class EmergencyStopNode:
         """Periodic monitoring for communication timeouts and system health."""
         current_time = rospy.Time.now()
         
-        # Check communication timeout (skip during calibration)
-        if self.stop_on_communication_loss and self.current_state != SystemStates.CALIBRATION_PROCESS:
+        # Check communication timeout (skip during calibration and shortly after)
+        # Reset the timeout counter when transitioning from CALIBRATION_PROCESS to READY
+        if self.current_state == SystemStates.READY and hasattr(self, '_just_finished_calibration'):
+            # Reset the last update time when entering READY state after calibration
+            self.last_motor_update = current_time
+            delattr(self, '_just_finished_calibration')
+            rospy.loginfo("e: Communication timeout reset after calibration completion")
+        
+        if self.stop_on_communication_loss and self.current_state not in [SystemStates.CALIBRATION_PROCESS, SystemStates.INIT]:
             time_since_update = (current_time - self.last_motor_update).to_sec()
             if time_since_update > self.communication_timeout:
                 rospy.logwarn(f"Motor communication timeout: {time_since_update:.1f}s")
@@ -363,6 +376,10 @@ class EmergencyStopNode:
                 rospy.loginfo(f"e: State transition: {self.current_state} -> {new_state}")
                 old_state = self.current_state
                 self.current_state = new_state
+                
+                # Set flag when transitioning from calibration to ready
+                if old_state == SystemStates.CALIBRATION_PROCESS and new_state == SystemStates.READY:
+                    self._just_finished_calibration = True
                 
                 # Send appropriate triggers to motor control nodes
                 self.send_state_triggers(old_state, new_state)
@@ -459,7 +476,7 @@ class InitState(smach.State):
         self.node.update_state(SystemStates.INIT)
         rospy.loginfo('e: System in INIT state - waiting for calibration')
         
-        rate = rospy.Rate(10)  # 10 Hz
+        rate = rospy.Rate(50)  # 50 Hz
         while not rospy.is_shutdown():
             with self.node.state_lock:
                 if self.node.st_calibration_trig:
@@ -492,7 +509,7 @@ class CalibrationProcessState(smach.State):
         self.node.calibration_trigger_pub.publish(calibration_msg)
         rospy.loginfo('e: Calibration trigger sent to motor control node')
 
-        rate = rospy.Rate(10)  # 10 Hz
+        rate = rospy.Rate(50)  # 50 Hz
         calibration_start_time = rospy.Time.now()
         max_calibration_time = 120.0  # 2 minutes maximum
         
@@ -540,7 +557,7 @@ class ReadyState(smach.State):
         # Clear any previous emergency stop
         self.node.clear_emergency_stop("System ready")
         
-        rate = rospy.Rate(10)  # 10 Hz
+        rate = rospy.Rate(50)  # 50 Hz
         while not rospy.is_shutdown():
             with self.node.state_lock:
                 # Check for walking trigger
@@ -568,7 +585,7 @@ class WalkingState(smach.State):
         self.node.update_state(SystemStates.WALKING)
         rospy.loginfo('e: System WALKING - active gait execution')
         
-        rate = rospy.Rate(10)  # 10 Hz
+        rate = rospy.Rate(50)  # 50 Hz
         
         while not rospy.is_shutdown():
             with self.node.state_lock:
@@ -597,7 +614,7 @@ class StoppingState(smach.State):
         self.node.update_state(SystemStates.STOPPING)
         rospy.loginfo('e: System STOPPING - waiting for cycle completion')
         
-        rate = rospy.Rate(10)  # 10 Hz
+        rate = rospy.Rate(50)  # 50 Hz
         
         while not rospy.is_shutdown():
             with self.node.state_lock:
