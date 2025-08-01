@@ -225,6 +225,7 @@ class EmergencyStopNode:
 
     def crutch_command_callback(self, msg):
         """Handle crutch commands from dummy_crutches_node."""
+        rospy.logwarn(f"🚨 DEBUG: Received crutch command: {msg.command}")
         with self.state_lock:
             if msg.command == CrutchCommand.ST_CALIBRATION_TRIG:
                 rospy.loginfo("e: Crutch command: Start calibration")
@@ -236,9 +237,12 @@ class EmergencyStopNode:
                 rospy.loginfo("e: Crutch command: Stop")
                 self.stop_trig = True
             elif msg.command == CrutchCommand.SHUTDOWN:
-                rospy.logwarn("Crutch command: Emergency shutdown")
+                rospy.logwarn("🚨 DEBUG: SHUTDOWN command received from crutches")
+                rospy.logwarn("e: Crutch command: Emergency shutdown")
                 self.shutdown_trig = True
+                rospy.logwarn("🚨 DEBUG: About to call trigger_emergency_stop")
                 self.trigger_emergency_stop("Shutdown command from crutches")
+                rospy.logwarn("🚨 DEBUG: trigger_emergency_stop called successfully")
             elif msg.command == CrutchCommand.DISABLE_MOTORS:
                 rospy.loginfo("Crutch command: Disable motors (not implemented)")
             elif msg.command == CrutchCommand.BREAK_MOTORS:
@@ -318,26 +322,33 @@ class EmergencyStopNode:
 
     def trigger_emergency_stop(self, reason="Emergency stop activated"):
         """Trigger emergency stop and publish e-stop message."""
-        with self.state_lock:
-            if not self.emergency_active:
-                self.emergency_active = True
-                rospy.logwarn(f"EMERGENCY STOP TRIGGERED: {reason}")
-                
-                # Update state to E_STOP
-                self.current_state = SystemStates.E_STOP
-                
-                # Publish emergency stop message
-                self.publish_emergency_stop()
-                
-                # Schedule shutdown after a brief delay to ensure message is sent
-                def delayed_shutdown():
-                    rospy.sleep(0.5)  # Give time for message to be sent and processed
-                    rospy.logwarn("Emergency stop complete - shutting down emergency stop node")
-                    rospy.signal_shutdown("Emergency stop triggered")
-                
-                shutdown_thread = threading.Thread(target=delayed_shutdown)
-                shutdown_thread.daemon = True
-                shutdown_thread.start()
+        rospy.logwarn(f"🚨 DEBUG: trigger_emergency_stop called with reason: {reason}")
+        # NOTE: Do not acquire state_lock here as it may already be held by caller
+        rospy.logwarn(f"🚨 DEBUG: Checking emergency_active={self.emergency_active}")
+        if not self.emergency_active:
+            rospy.logwarn("🚨 DEBUG: Emergency not active, proceeding with emergency stop")
+            self.emergency_active = True
+            rospy.logwarn(f"EMERGENCY STOP TRIGGERED: {reason}")
+            
+            # Update state to E_STOP
+            rospy.logwarn(f"🚨 DEBUG: Updating current state from {self.current_state} to E_STOP")
+            self.current_state = SystemStates.E_STOP
+            
+            # Publish emergency stop message
+            rospy.logwarn("🚨 DEBUG: About to call publish_emergency_stop")
+            self.publish_emergency_stop()
+            rospy.logwarn("🚨 DEBUG: publish_emergency_stop called successfully")
+            # Schedule shutdown after a brief delay to ensure message is sent
+            def delayed_shutdown():
+                rospy.sleep(0.5)  # Give time for message to be sent and processed
+                rospy.logwarn("Emergency stop complete - shutting down emergency stop node")
+                rospy.signal_shutdown("Emergency stop triggered")
+            
+            shutdown_thread = threading.Thread(target=delayed_shutdown)
+            shutdown_thread.daemon = True
+            shutdown_thread.start()
+        else:
+            rospy.logwarn("🚨 DEBUG: Emergency already active, ignoring duplicate trigger")
 
     def clear_emergency_stop(self, reason="Emergency cleared"):
         """Clear emergency stop condition."""
@@ -358,11 +369,15 @@ class EmergencyStopNode:
         
     def publish_emergency_stop(self):
         """Publish emergency stop trigger when needed."""
+        rospy.logwarn("🚨 DEBUG: publish_emergency_stop called")
         e_stop_msg = EStopTrigger()
         e_stop_msg.header.stamp = rospy.Time.now()
         e_stop_msg.trigger = self.emergency_active
         e_stop_msg.state = self.current_state
+        rospy.logwarn(f"🚨 DEBUG: Publishing e_stop_trigger with trigger={e_stop_msg.trigger}, state={e_stop_msg.state}")
+        rospy.logwarn(f"🚨 DEBUG: Topic: {self.e_stop_trigger_pub.name}, Subscribers: {self.e_stop_trigger_pub.get_num_connections()}")
         self.e_stop_trigger_pub.publish(e_stop_msg)
+        rospy.logwarn("🚨 DEBUG: e_stop_trigger message published successfully")
         
     def publish_fsm_state_periodically(self, event):
         """Periodically publish FSM state for other nodes."""

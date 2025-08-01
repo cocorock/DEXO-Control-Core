@@ -37,7 +37,10 @@ class DummyCrutchesNode:
         msg.header.stamp = rospy.Time.now()
         msg.command = command_type
         
+        rospy.logwarn(f"🚨 DEBUG: Publishing crutch command: {command_type} on topic: {self.crutch_command_pub.name}")
+        rospy.logwarn(f"🚨 DEBUG: Number of subscribers: {self.crutch_command_pub.get_num_connections()}")
         self.crutch_command_pub.publish(msg)
+        rospy.logwarn(f"🚨 DEBUG: Crutch command published successfully")
         
         command_names = {
             CrutchCommand.ST_CALIBRATION_TRIG: "Start Calibration",
@@ -105,7 +108,10 @@ class DummyCrutchesNode:
                     self.send_crutch_command(CrutchCommand.STOP_TRIG)
                 
                 elif command in ['e', 'emergency']:
+                    rospy.logwarn("🚨 DEBUG: Emergency command 'e' received in CLI")
+                    rospy.logwarn("🚨 DEBUG: About to send SHUTDOWN crutch command")
                     self.send_crutch_command(CrutchCommand.SHUTDOWN)
+                    rospy.logwarn("🚨 DEBUG: SHUTDOWN crutch command sent successfully")
                 
                 elif command in ['d', 'disable']:
                     self.send_crutch_command(CrutchCommand.DISABLE_MOTORS)

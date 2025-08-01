@@ -476,12 +476,16 @@ class MotorControlNode:
 
     def e_stop_callback(self, msg):
         """Handle emergency stop signals only."""
+        rospy.logwarn(f"🚨 DEBUG: Motor control received e_stop_trigger: trigger={msg.trigger}, state={msg.state}")
         if msg.trigger:
+            rospy.logwarn("🚨 DEBUG: Emergency stop trigger is TRUE - proceeding with emergency shutdown")
             self.is_emergency_stop = True
             rospy.logwarn("m: Emergency stop triggered - initiating shutdown sequence")
             
             # Stop all motors immediately
+            rospy.logwarn("🚨 DEBUG: About to call emergency_stop_motors")
             self.emergency_stop_motors()
+            rospy.logwarn("🚨 DEBUG: emergency_stop_motors completed")
             
             # Update calibration state if needed
             if self.calibration_state not in [CalibrationState.NOT_STARTED, CalibrationState.COMPLETED]:
@@ -489,11 +493,16 @@ class MotorControlNode:
                 self.calibration_state = CalibrationState.FAILED
             
             # Perform clean shutdown
+            rospy.logwarn("🚨 DEBUG: About to call perform_emergency_shutdown")
             self.perform_emergency_shutdown()
+            rospy.logwarn("🚨 DEBUG: perform_emergency_shutdown completed")
             
             # Signal ROS to shutdown this node
+            rospy.logwarn("🚨 DEBUG: About to signal ROS shutdown")
             rospy.signal_shutdown("Emergency stop triggered")
+            rospy.logwarn("🚨 DEBUG: ROS shutdown signal sent")
         else:
+            rospy.logwarn("🚨 DEBUG: Emergency stop trigger is FALSE - clearing emergency stop")
             self.is_emergency_stop = False
             
     def fsm_state_callback(self, msg):
@@ -1102,8 +1111,8 @@ class MotorControlNode:
 
                 # Check loop timing
                 loop_time = time.time() - loop_start_time
-                if loop_time > 0.004:  # 4ms calculation budget exceeded (200Hz = 5ms period)
-                    rospy.logwarn(f"Control loop exceeded time budget: {loop_time*1000:.2f}ms")
+                # if loop_time > 0.004:  # 4ms calculation budget exceeded (200Hz = 5ms period)
+                #     rospy.logwarn(f"Control loop exceeded time budget: {loop_time*1000:.2f}ms")
 
             except Exception as e:
                 rospy.logerr(f"Error in control loop: {e}")
