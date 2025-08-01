@@ -1111,8 +1111,8 @@ class MotorControlNode:
 
                 # Check loop timing
                 loop_time = time.time() - loop_start_time
-                # if loop_time > 0.004:  # 4ms calculation budget exceeded (200Hz = 5ms period)
-                #     rospy.logwarn(f"Control loop exceeded time budget: {loop_time*1000:.2f}ms")
+                if loop_time > 0.004:  # 4ms calculation budget exceeded (200Hz = 5ms period)
+                    rospy.logwarn(f"Control loop exceeded time budget: {loop_time*1000:.2f}ms")
 
             except Exception as e:
                 rospy.logerr(f"Error in control loop: {e}")
