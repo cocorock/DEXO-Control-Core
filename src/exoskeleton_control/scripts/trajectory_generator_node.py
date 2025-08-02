@@ -41,9 +41,9 @@ class TrajectoryGeneratorNode:
         # Control rate
         self.rate = rospy.Rate(self.control_frequency)
 
-        rospy.loginfo("Trajectory Generator Node initialized")
+        rospy.loginfo("t: Trajectory Generator Node initialized")
         if self.trajectory_data:
-            rospy.loginfo(f"Loaded trajectory with {self.trajectory_length} data points")
+            rospy.loginfo(f"t: Loaded trajectory with {self.trajectory_length} data points")
         else:
             rospy.logwarn("No trajectory data loaded - waiting for gait_params")
 
@@ -74,7 +74,7 @@ class TrajectoryGeneratorNode:
             self.ERROR_UNREACHABLE = -333.0
             self.ERROR_JOINT_LIMITS = -444.0
 
-            rospy.loginfo("Trajectory generator configuration loaded successfully")
+            rospy.loginfo("t: Trajectory generator configuration loaded successfully")
 
         except Exception as e:
             rospy.logerr(f"Error loading configuration: {e}")
@@ -118,7 +118,7 @@ class TrajectoryGeneratorNode:
                     with open(path, 'r') as f:
                         raw_data = json.load(f)
                     file_found = True
-                    rospy.loginfo(f"Trajectory file loaded from: {path}")
+                    rospy.loginfo(f"t: Trajectory file loaded from: {path}")
                     break
             
             if not file_found:
@@ -154,7 +154,7 @@ class TrajectoryGeneratorNode:
                 'velocities': []  # [hip_vel, knee_vel] for each timestep
             }
             
-            rospy.loginfo(f"Processing {self.trajectory_length} trajectory points...")
+            rospy.loginfo(f"t: Processing {self.trajectory_length} trajectory points...")
             
             successful_points = 0
             for i in range(self.trajectory_length):
@@ -218,13 +218,13 @@ class TrajectoryGeneratorNode:
                 return False
             
             self.trajectory_length = successful_points
-            rospy.loginfo(f"Successfully processed {successful_points}/{len(time_data)} trajectory points")
+            rospy.loginfo(f"t: Successfully processed {successful_points}/{len(time_data)} trajectory points")
             
             # Log some statistics
             if self.trajectory_data['positions']:
                 positions = np.array(self.trajectory_data['positions'])
-                rospy.loginfo(f"Hip angle range: {math.degrees(np.min(positions[:, 0])):.1f}° to {math.degrees(np.max(positions[:, 0])):.1f}°")
-                rospy.loginfo(f"Knee angle range: {math.degrees(np.min(positions[:, 1])):.1f}° to {math.degrees(np.max(positions[:, 1])):.1f}°")
+                rospy.loginfo(f"t: Hip angle range: {math.degrees(np.min(positions[:, 0])):.1f}° to {math.degrees(np.max(positions[:, 0])):.1f}°")
+                rospy.loginfo(f"t: Knee angle range: {math.degrees(np.min(positions[:, 1])):.1f}° to {math.degrees(np.max(positions[:, 1])):.1f}°")
             
             return True
 
@@ -394,7 +394,7 @@ class TrajectoryGeneratorNode:
 
     def gait_params_callback(self, msg):
         """Process gait parameters - future implementation for GMR."""
-        rospy.loginfo("Received gait_params - GMR implementation pending")
+        rospy.loginfo("t: Received gait_params - GMR implementation pending")
         # TODO: Implement GMR-based trajectory generation
         pass
 
@@ -525,7 +525,7 @@ class TrajectoryGeneratorNode:
                 if self.current_trajectory_index % 50 == 0:
                     hip_deg = math.degrees(current_pos[0])
                     knee_deg = math.degrees(current_pos[1])
-                    rospy.loginfo(f"Publishing trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
+                    rospy.loginfo(f"t: Publishing trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
                 # Fallback to first trajectory position if no active trajectory
@@ -560,7 +560,7 @@ class TrajectoryGeneratorNode:
                 if self.current_trajectory_index % 50 == 0:
                     hip_deg = math.degrees(current_pos[0])
                     knee_deg = math.degrees(current_pos[1])
-                    rospy.loginfo(f"STOPPING - trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
+                    rospy.loginfo(f"t: STOPPING - trajectory point {self.current_trajectory_index}/{self.trajectory_length}: "
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
                 # Trajectory finished in STOPPING state - use first position until state change
@@ -598,13 +598,13 @@ class TrajectoryGeneratorNode:
         
         self.trajectory_active = True
         self.current_trajectory_index = 0
-        rospy.loginfo("Trajectory playback started")
+        rospy.loginfo("t: Trajectory playback started")
         return True
 
     def stop_trajectory(self):
         """Stop trajectory playback."""
         self.trajectory_active = False
-        rospy.loginfo("Trajectory playback stopped")
+        rospy.loginfo("t: Trajectory playback stopped")
 
     def send_cycle_finished(self):
         """Send cycle finished signal to emergency stop node."""
@@ -718,6 +718,6 @@ if __name__ == '__main__':
         
         node.run()
     except rospy.ROSInterruptException:
-        rospy.loginfo("Trajectory Generator Node shutdown")
+        rospy.loginfo("t: Trajectory Generator Node shutdown")
     except Exception as e:
         rospy.logerr(f"Unexpected error in Trajectory Generator Node: {e}")
