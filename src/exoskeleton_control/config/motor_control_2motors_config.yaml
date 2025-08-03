@@ -12,39 +12,39 @@ calibration:
   sequence: [1, 2]               # Calibration order: Right hip (1), Right knee (2)
   speed_deg: 30.0                # Calibration speed in degrees/second (0.52 rad/s)
   max_time: 30.0                 # Maximum calibration time in seconds
-  torque_thresholds: [2.0, 2.0]  # Torque thresholds [hip, knee] in Nm
+  torque_thresholds: [2.0, 2.3]  # Torque thresholds [hip, knee] in Nm
   
   # Compensation torques for structural weight during calibration
   # Format: [negative_limit_torque, positive_limit_torque] per motor (standard order)
   # negative_limit_torque: torque applied when moving to negative limit (typically negative value)
   # positive_limit_torque: torque applied when moving to positive limit (typically positive value)
   compensation_torques:
-    right_hip: [10.0, 5.0]      # [-Nm, +Nm] for negative/positive limit directions
-    right_knee: [3.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
+    right_hip: [7.0, 14.0]      # [-Nm, +Nm] for negative/positive limit directions
+    right_knee: [7.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
 
 # Motor Hardware Configuration
 motors:
   ids: [0x06, 0x08]              # CAN IDs: [Right hip, Right knee]
   joint_names: ['right_hip', 'right_knee']
   models: ['AK80_64', 'AK80_8']  # Motor models
-  directions: [1, 1]             # Direction multipliers
+  directions: [-1, 1]             # Direction multipliers
   
   # Joint angle limits in degrees [min, max]
   angle_limits_deg:
-    - [-84, 31]   # Right hip: -50° to 90°
-    - [-90, 0]   # Right knee: -100° to 10°
+    - [-31, 84]   # Right hip: -50° to 90°
+    - [-92, 0]   # Right knee: -100° to 10°
 
 # Control Gains per Motor
 control_gains:
   right_hip:
     calibration: {kp: 0.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 15.0, kd: 2.0}
+    trajectory:  {kp: 5.0, kd: 0.50}
   
   right_knee:
     calibration: {kp: 0.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 15.0, kd: 2.0}
+    trajectory:  {kp: 2.0, kd: 0.50}
 
 # =====================================================================
 # TRAJECTORY GENERATOR CONFIGURATION
@@ -56,13 +56,13 @@ trajectory_generator:
   
   # Leg Kinematics (meters)
   leg_parameters:
-    L1: 0.44                     # Thigh length (hip to knee)
-    L2: 0.44                     # Shin length (knee to ankle)
+    L1: 0.38                     # Thigh length (hip to knee)
+    L2: 0.42                     # Shin length (knee to ankle)
   
   # Joint Limits (degrees) - Must match motor limits above
   joint_limits:
-    hip_min_deg:  -84            # Hip minimum angle
-    hip_max_deg:   31            # Hip maximum angle  
+    hip_min_deg:  -31            # Hip minimum angle
+    hip_max_deg:   84            # Hip maximum angle  
     knee_min_deg: -90           # Knee minimum angle
     knee_max_deg:   0            # Knee maximum angle
   

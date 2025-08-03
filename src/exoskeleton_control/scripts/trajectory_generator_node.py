@@ -83,11 +83,11 @@ class TrajectoryGeneratorNode:
     def set_default_configuration(self):
         """Set default configuration values."""
         self.control_frequency = 200
-        self.L1 = 0.44  # Thigh length
-        self.L2 = 0.44  # Shin length
-        self.theta1_min = math.radians(-30)
-        self.theta1_max = math.radians(90)
-        self.theta2_min = math.radians(-100)
+        self.L1 = 0.38  # Thigh length
+        self.L2 = 0.42  # Shin length
+        self.theta1_min = math.radians(-31)
+        self.theta1_max = math.radians(84)
+        self.theta2_min = math.radians(-92)
         self.theta2_max = math.radians(0)
         self.trajectory_file = 'trajectory.json'
         self.loop_trajectory = True

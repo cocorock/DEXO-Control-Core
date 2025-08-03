@@ -55,4 +55,7 @@
     <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
   </node>
 
+  <!-- Trajectory Plotter Node -->
+  <node name="trajectory_plotter_node" pkg="exoskeleton_control" type="trajectory_plotter_node.py" output="screen"/>
+
 </launch>
