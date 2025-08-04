@@ -761,7 +761,7 @@ class MotorControlNode:
                     state.p_in = 0.0        # Target zero position
                     state.v_in = 0.0        # Zero velocity
                     state.kp_in = 0.0       # Zero position gain (no position control)
-                    state.kd_in = 2.5      # Light damping as requested
+                    state.kd_in = 5      # Light damping as requested
                     state.t_in = 0.0        # Zero torque
                     
                     motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)

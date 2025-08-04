@@ -494,11 +494,13 @@ class TrajectoryGeneratorNode:
         # Set values based on system state
         if self.system_state == "READY":
             # READY state: publish first trajectory position with zero velocities
-            trajectory_msg.Rhip_pos_ref  = first_pos[0]
+            # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+            modified_hip_pos = -first_pos[0] - math.radians(18)
+            trajectory_msg.Rhip_pos_ref  = modified_hip_pos
             trajectory_msg.Rknee_pos_ref = first_pos[1]
             trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity for safety
             trajectory_msg.Rknee_vel_ref = 0.0  # Zero velocity for safety
-            trajectory_msg.Lhip_pos_ref  = first_pos[0]  # Mirror right leg
+            trajectory_msg.Lhip_pos_ref  = modified_hip_pos  # Mirror right leg
             trajectory_msg.Lknee_pos_ref = first_pos[1]  # Mirror right leg
             trajectory_msg.Lhip_vel_ref  = 0.0   # Zero velocity for safety
             trajectory_msg.Lknee_vel_ref = 0.0   # Zero velocity for safety
@@ -510,15 +512,18 @@ class TrajectoryGeneratorNode:
                 current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
                 
                 # Right leg data from trajectory
-                trajectory_msg.Rhip_pos_ref  = current_pos[0]  # Hip position
+                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+                modified_hip_pos = -current_pos[0] - math.radians(18)
+                modified_hip_vel = -current_vel[0]  # Also invert hip velocity
+                trajectory_msg.Rhip_pos_ref  = modified_hip_pos  # Hip position
                 trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
-                trajectory_msg.Rhip_vel_ref  = current_vel[0]  # Hip velocity
+                trajectory_msg.Rhip_vel_ref  = modified_hip_vel  # Hip velocity
                 trajectory_msg.Rknee_vel_ref = current_vel[1]  # Knee velocity
                 
                 # Left leg data (mirror right leg for now, or use separate data if available)
-                trajectory_msg.Lhip_pos_ref  = current_pos[0]  # Mirror right hip
+                trajectory_msg.Lhip_pos_ref  = modified_hip_pos  # Mirror right hip
                 trajectory_msg.Lknee_pos_ref = current_pos[1]  # Mirror right knee
-                trajectory_msg.Lhip_vel_ref  = current_vel[0]  # Mirror right hip velocity
+                trajectory_msg.Lhip_vel_ref  = modified_hip_vel  # Mirror right hip velocity
                 trajectory_msg.Lknee_vel_ref = current_vel[1]  # Mirror right knee velocity
                 
                 # Log trajectory progress occasionally
@@ -529,11 +534,13 @@ class TrajectoryGeneratorNode:
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
                 # Fallback to first trajectory position if no active trajectory
-                trajectory_msg.Rhip_pos_ref  = first_pos[0]
+                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+                modified_hip_pos = -first_pos[0] - math.radians(18)
+                trajectory_msg.Rhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Rknee_pos_ref = first_pos[1]
                 trajectory_msg.Rhip_vel_ref  = 0.0
                 trajectory_msg.Rknee_vel_ref = 0.0
-                trajectory_msg.Lhip_pos_ref  = first_pos[0]
+                trajectory_msg.Lhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Lknee_pos_ref = first_pos[1]
                 trajectory_msg.Lhip_vel_ref  = 0.0
                 trajectory_msg.Lknee_vel_ref = 0.0
@@ -545,15 +552,18 @@ class TrajectoryGeneratorNode:
                 current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
                 
                 # Right leg data from trajectory
-                trajectory_msg.Rhip_pos_ref  = current_pos[0]  # Hip position
+                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+                modified_hip_pos = -current_pos[0] - math.radians(18)
+                modified_hip_vel = -current_vel[0]  # Also invert hip velocity
+                trajectory_msg.Rhip_pos_ref  = modified_hip_pos  # Hip position
                 trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
-                trajectory_msg.Rhip_vel_ref  = current_vel[0]  # Hip velocity
+                trajectory_msg.Rhip_vel_ref  = modified_hip_vel  # Hip velocity
                 trajectory_msg.Rknee_vel_ref = current_vel[1]  # Knee velocity
                 
                 # Left leg data (mirror right leg for now, or use separate data if available)
-                trajectory_msg.Lhip_pos_ref  = current_pos[0]  # Mirror right hip
+                trajectory_msg.Lhip_pos_ref  = modified_hip_pos  # Mirror right hip
                 trajectory_msg.Lknee_pos_ref = current_pos[1]  # Mirror right knee
-                trajectory_msg.Lhip_vel_ref  = current_vel[0]  # Mirror right hip velocity
+                trajectory_msg.Lhip_vel_ref  = modified_hip_vel  # Mirror right hip velocity
                 trajectory_msg.Lknee_vel_ref = current_vel[1]  # Mirror right knee velocity
                 
                 # Log stopping progress occasionally
@@ -564,21 +574,25 @@ class TrajectoryGeneratorNode:
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
                 # Trajectory finished in STOPPING state - use first position until state change
-                trajectory_msg.Rhip_pos_ref  = first_pos[0]
+                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+                modified_hip_pos = -first_pos[0] - math.radians(18)
+                trajectory_msg.Rhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Rknee_pos_ref = first_pos[1]
                 trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity when stopped
                 trajectory_msg.Rknee_vel_ref = 0.0  # Zero velocity when stopped
-                trajectory_msg.Lhip_pos_ref  = first_pos[0]
+                trajectory_msg.Lhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Lknee_pos_ref = first_pos[1]
                 trajectory_msg.Lhip_vel_ref  = 0.0   # Zero velocity when stopped
                 trajectory_msg.Lknee_vel_ref = 0.0   # Zero velocity when stopped
         else:
             # All other states (INIT, CALIBRATION_PROCESS, E_STOP): use same as READY
-            trajectory_msg.Rhip_pos_ref  = first_pos[0]
+            # Apply hip angle modification: multiply by -1 and subtract 18 degrees
+            modified_hip_pos = -first_pos[0] - math.radians(18)
+            trajectory_msg.Rhip_pos_ref  = modified_hip_pos
             trajectory_msg.Rknee_pos_ref = first_pos[1]
             trajectory_msg.Rhip_vel_ref  = 0.0
             trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref  = first_pos[0]
+            trajectory_msg.Lhip_pos_ref  = modified_hip_pos
             trajectory_msg.Lknee_pos_ref = first_pos[1]
             trajectory_msg.Lhip_vel_ref  = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
