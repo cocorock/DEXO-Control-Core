@@ -56,6 +56,9 @@
   </node>
 
   <!-- Trajectory Plotter Node -->
-  <node name="trajectory_plotter_node" pkg="exoskeleton_control" type="trajectory_plotter_node.py" output="screen"/>
+  <node name="trajectory_plotter_node" pkg="exoskeleton_control" type="trajectory_plotter_node.py" output="screen">
+    <remap from="/exoskeleton/joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="/exoskeleton/torques" to="/exoskeleton/torques"/>
+  </node>
 
 </launch>

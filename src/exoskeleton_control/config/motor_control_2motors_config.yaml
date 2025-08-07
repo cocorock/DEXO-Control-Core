@@ -19,8 +19,8 @@ calibration:
   # negative_limit_torque: torque applied when moving to negative limit (typically negative value)
   # positive_limit_torque: torque applied when moving to positive limit (typically positive value)
   compensation_torques:
-    right_hip: [6.0, 12.0]      # [-Nm, +Nm] for negative/positive limit directions
-    right_knee: [7.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
+    right_hip:  [0.0, 0.0] #[6.0, 12.0]      # [-Nm, +Nm] for negative/positive limit directions
+    right_knee: [0.0, 0.0]  #[7.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
 
 # Motor Hardware Configuration
 motors:
@@ -31,8 +31,8 @@ motors:
   
   # Joint angle limits in degrees [min, max]
   angle_limits_deg:
-    - [-31, 84]   # Right hip: -50° to 90°
-    - [-92, 0]   # Right knee: -100° to 10°
+    - [-31, 84]   # Right hip: for negative/positive limit directions
+    - [-92, 0]   # Right knee: for negative/positive limit directions
 
 # Control Gains per Motor
 control_gains:
@@ -59,19 +59,13 @@ trajectory_generator:
     L1: 0.38                     # Thigh length (hip to knee)
     L2: 0.42                     # Shin length (knee to ankle)
   
-  # Joint Limits (degrees) - Must match motor limits above
-  joint_limits:
-    hip_min_deg:  -31            # Hip minimum angle
-    hip_max_deg:   84            # Hip maximum angle  
-    knee_min_deg: -90           # Knee minimum angle
-    knee_max_deg:   0            # Knee maximum angle
+  # Joint limits are defined in motors.angle_limits_deg section above
   
   # Trajectory Data Configuration
-  trajectory:
-    file: 'gait_data_39_1.json'
-    loop: true                   # Loop trajectory continuously
-    scale: 1.0                   # Scaling factor for trajectory positions
-    
+  trajectory_file: 'gait_data_39_1.json'    # Trajectory data file name
+  loop_trajectory: true                      # Loop trajectory continuously
+  trajectory_scale: 1.0                      # Scaling factor for trajectory positions
+  
   # State-based Output Values
   output_values:
     ready_state:   [0.0, 0.0, 0.0, 0.0]  # [hip_pos, knee_pos, hip_vel, knee_vel]

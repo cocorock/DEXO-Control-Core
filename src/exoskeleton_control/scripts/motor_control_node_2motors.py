@@ -265,6 +265,8 @@ class MotorControlNode:
         # Log per-motor configuration
         for motor_id, config in self.motor_configs.items():
             rospy.loginfo(f"m:   Motor {motor_id} ({config.joint_name}):")
+            rospy.loginfo(f"m:     Joint limits: {math.degrees(config.min_angle_rad):.1f}° to {math.degrees(config.max_angle_rad):.1f}°")
+            rospy.loginfo(f"m:     Motor direction: {config.direction}")
             rospy.loginfo(f"m:     Torque threshold: {config.torque_threshold} Nm")
             rospy.loginfo(f"m:     Compensation torques: {config.compensation_torque_negative} Nm (neg), +{config.compensation_torque_positive} Nm (pos)")
             rospy.loginfo(f"m:     Calibration gains: kp={config.gains['calibration']['kp']}, kd={config.gains['calibration']['kd']}")
@@ -666,8 +668,9 @@ class MotorControlNode:
                     if motor_driver.read_motor_status(self.can_channel, controller, state, 
                                                     max_attempts=3, timeout_ms=10, debug_flag=self.debug_flag):
                         
-                        # Log current position and torque for debugging
-                        rospy.loginfo_throttle(0.5, f"m:   Motor {motor_id} pos: {math.degrees(state.p_out):.1f}°, "
+                        # Log current position and torque for debugging (use direction-corrected position)
+                        corrected_position_for_log = state.p_out * config.direction
+                        rospy.loginfo_throttle(0.5, f"m:   Motor {motor_id} pos: {math.degrees(corrected_position_for_log):.1f}°, "
                                              f"torque: {state.t_out:.2f} Nm, direction: {direction}")
                         
                         # Validate position reading - check for impossible values
@@ -677,15 +680,17 @@ class MotorControlNode:
                             continue
                         # Check if motor position approaches configured angle limits with safety margin
                         # Add safety margin to account for feedback delay and momentum
+                        # Apply direction correction to raw motor position for comparison with logical limits
+                        corrected_position = state.p_out * config.direction
                         safety_margin_rad = math.radians(5.0)  # 5 degree safety margin
                         limit_exceeded = False
                         
-                        if direction > 0 and state.p_out > (config.max_angle_rad - safety_margin_rad):
-                            rospy.logwarn(f"m:   Motor {motor_id} position {math.degrees(state.p_out):.1f}° approaches max limit "
+                        if direction > 0 and corrected_position > (config.max_angle_rad - safety_margin_rad):
+                            rospy.logwarn(f"m:   Motor {motor_id} position {math.degrees(corrected_position):.1f}° approaches max limit "
                                          f"{math.degrees(config.max_angle_rad):.1f}° in positive direction")
                             limit_exceeded = True
-                        elif direction < 0 and state.p_out < (config.min_angle_rad + safety_margin_rad):
-                            rospy.logwarn(f"m:   Motor {motor_id} position {math.degrees(state.p_out):.1f}° approaches min limit "
+                        elif direction < 0 and corrected_position < (config.min_angle_rad + safety_margin_rad):
+                            rospy.logwarn(f"m:   Motor {motor_id} position {math.degrees(corrected_position):.1f}° approaches min limit "
                                          f"{math.degrees(config.min_angle_rad):.1f}° in negative direction")
                             limit_exceeded = True
                         
@@ -735,8 +740,9 @@ class MotorControlNode:
                                     state.t_in = state.t_in * 1.2
                                 continue
                             
-                            limits.append(state.p_out)
-                            rospy.loginfo(f"m:   Limit found at position: {math.degrees(state.p_out):.1f}°, torque: {state.t_out:.2f} Nm")
+                            limits.append(state.p_out)  # Store raw motor position as physical limit
+                            corrected_pos_for_log = state.p_out * config.direction
+                            rospy.loginfo(f"m:   Limit found at position: {math.degrees(corrected_pos_for_log):.1f}° (corrected), torque: {state.t_out:.2f} Nm")
                             rospy.loginfo(f"m:   Movement: {math.degrees(movement_from_start):.1f}°")
                             rospy.loginfo(f"m:   Threshold calculation: compensation={expected_torque_magnitude:.2f}, margin={config.torque_threshold:.2f}, total={dynamic_threshold:.2f} Nm")
                             
@@ -777,7 +783,8 @@ class MotorControlNode:
                     # Read final position after settling
                     motor_driver.read_motor_status(self.can_channel, controller, state, 
                                                  max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
-                    rospy.loginfo(f"m:   Equilibrium position: {math.degrees(state.p_out):.1f}°")
+                    corrected_eq_pos = state.p_out * config.direction
+                    rospy.loginfo(f"m:   Equilibrium position: {math.degrees(corrected_eq_pos):.1f}° (corrected)")
             
             # Check if both limits were found
             if len(limits) != 2:
@@ -1028,21 +1035,23 @@ class MotorControlNode:
                                                  f"vel={self.desired_velocities[i]:.3f}")
                         
                         # Set impedance control parameters
-                        state.p_in = desired_pos
+                        state.p_in = desired_pos * config.direction  # Apply motor direction to position command
                         state.v_in = self.desired_velocities[i] * config.direction  # Apply motor direction
                         state.kp_in = config.gains['trajectory']['kp']
                         state.kd_in = config.gains['trajectory']['kd']
-                        state.t_in = self.feedforward_torques[i] * config.direction  # Apply direction to torque
+                        # TESTING: Feedforward torques calculated but not sent to motors
+                        # state.t_in = self.feedforward_torques[i] * config.direction  # Apply direction to torque
+                        state.t_in = 0.0  # Zero torque for testing feedforward calculation
                         
                         motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
                         time.sleep(0.001)  # Brief delay for motor response
                         # Always read response after sending command and update motor state values
                         if motor_driver.read_motor_status(self.can_channel, controller, state, 
                                                         max_attempts=3, timeout_ms=1, debug_flag=self.debug_flag):
-                            # Update motor state values directly after reading response
-                            self.motor_positions[i] = state.p_out
-                            self.motor_velocities[i] = state.v_out
-                            self.motor_torques[i] = state.t_out
+                            # Update motor state values directly after reading response (apply direction inversion)
+                            self.motor_positions[i] = state.p_out * config.direction
+                            self.motor_velocities[i] = state.v_out * config.direction
+                            self.motor_torques[i] = state.t_out * config.direction
                             self.motor_temperatures[i] = state.temperature
                             self.motor_error_flags[i] = state.error_flag
                         else:
@@ -1063,10 +1072,10 @@ class MotorControlNode:
                         # Always read response after sending command and update motor state values
                         if motor_driver.read_motor_status(self.can_channel, controller, state, 
                                                         max_attempts=3, timeout_ms=1, debug_flag=self.debug_flag):
-                            # Update motor state values directly after reading response
-                            self.motor_positions[i] = state.p_out
-                            self.motor_velocities[i] = state.v_out
-                            self.motor_torques[i] = state.t_out
+                            # Update motor state values directly after reading response (apply direction inversion)
+                            self.motor_positions[i] = state.p_out * config.direction
+                            self.motor_velocities[i] = state.v_out * config.direction
+                            self.motor_torques[i] = state.t_out * config.direction
                             self.motor_temperatures[i] = state.temperature
                             self.motor_error_flags[i] = state.error_flag
                         else:
@@ -1192,7 +1201,7 @@ class MotorControlNode:
                     if self.calibration_state == CalibrationState.COMPLETED:
                         rospy.loginfo_throttle(10, "m: Motor control READY - waiting for walking command from emergency stop")
                         # Keep motors in hold mode and update states
-                        #self.calculate_feedforward_torques()
+                        self.calculate_feedforward_torques()
                         self.send_motor_commands()  # Will send hold commands
                     else:
                         rospy.logwarn_throttle(5, "m: In READY state but calibration not completed")
@@ -1201,7 +1210,7 @@ class MotorControlNode:
                     # In WALKING state - execute trajectory
                     if self.calibration_state == CalibrationState.COMPLETED:
                         # Step 1: Calculate feedforward torques (designed for <4ms)
-                        # self.calculate_feedforward_torques()
+                        self.calculate_feedforward_torques()
 
                         # Step 2: Send motor commands (should take ~222μs for 2 motors)
                         self.send_motor_commands()
@@ -1214,7 +1223,7 @@ class MotorControlNode:
                     if self.calibration_state == CalibrationState.COMPLETED:
                         rospy.loginfo_throttle(2, "m: Motor control in STOPPING state - continuing current motion")
                         # Continue executing trajectory until it naturally ends
-                        # self.calculate_feedforward_torques()
+                        self.calculate_feedforward_torques()
                         self.send_motor_commands()
                     else:
                         rospy.logerr("m: Cannot execute stopping - calibration not completed")
