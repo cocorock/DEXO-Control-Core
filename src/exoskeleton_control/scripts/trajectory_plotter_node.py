@@ -51,61 +51,45 @@ class SystemPlotter:
             self.state_callback
         )
         
-        # Setup matplotlib with 2x3 grid
-        plt.style.use('default')
+        # Setup matplotlib with 2x3 grid and black background
+        plt.style.use('dark_background')
         self.fig, ((self.ax1, self.ax2, self.ax3), (self.ax4, self.ax5, self.ax6)) = plt.subplots(2, 3, figsize=(18, 10))
-        self.fig.suptitle('Real-time Exoskeleton System Visualization', fontsize=16)
+        self.fig.patch.set_facecolor('black')
+        self.fig.suptitle('Real-time Exoskeleton System Visualization', fontsize=16, color='white')
         
-        # Initialize plots
+        # Initialize plots - swapped positions: 1,3,5 (top row), 2,4,6 (bottom row)
         self.line1, = self.ax1.plot([], [], 'b-', linewidth=1, label='Right Hip Position Ref')
         self.line1_current, = self.ax1.plot([], [], 'b--', linewidth=1, label='Right Hip Position Current')
-        self.line2, = self.ax2.plot([], [], 'r-', linewidth=1, label='Right Knee Position Ref')
-        self.line2_current, = self.ax2.plot([], [], 'r--', linewidth=1, label='Right Knee Position Current')
-        self.line3, = self.ax3.plot([], [], 'g-', linewidth=1, label='Right Hip Velocity Ref')
-        self.line3_current, = self.ax3.plot([], [], 'g--', linewidth=1, label='Right Hip Velocity Current')
-        self.line4, = self.ax4.plot([], [], 'm-', linewidth=1, label='Right Knee Velocity Ref')
-        self.line4_current, = self.ax4.plot([], [], 'm--', linewidth=1, label='Right Knee Velocity Current')
-        self.line5, = self.ax5.plot([], [], 'c-', linewidth=1, label='Hip FF Torque')
-        self.line5b, = self.ax5.plot([], [], 'orange', linewidth=1, linestyle='--', label='Hip Motor Torque')
+        self.line3, = self.ax2.plot([], [], 'g-', linewidth=1, label='Right Hip Velocity Ref')
+        self.line3_current, = self.ax2.plot([], [], 'g--', linewidth=1, label='Right Hip Velocity Current')
+        self.line5, = self.ax3.plot([], [], 'c-', linewidth=1, label='Hip FF Torque')
+        self.line5b, = self.ax3.plot([], [], 'orange', linewidth=1, linestyle='--', label='Hip Motor Torque')
+        self.line2, = self.ax4.plot([], [], 'r-', linewidth=1, label='Right Knee Position Ref')
+        self.line2_current, = self.ax4.plot([], [], 'r--', linewidth=1, label='Right Knee Position Current')
+        self.line4, = self.ax5.plot([], [], 'm-', linewidth=1, label='Right Knee Velocity Ref')
+        self.line4_current, = self.ax5.plot([], [], 'm--', linewidth=1, label='Right Knee Velocity Current')
         self.line6, = self.ax6.plot([], [], 'y-', linewidth=1, label='Knee FF Torque')
         self.line6b, = self.ax6.plot([], [], 'purple', linewidth=1, linestyle='--', label='Knee Motor Torque')
         
-        # Configure axes
-        self.ax1.set_title('Right Hip Position (rad)')
-        self.ax1.set_xlabel('Time (s)')
-        self.ax1.set_ylabel('Position (rad)')
-        self.ax1.grid(True)
-        self.ax1.legend()
+        # Configure axes with dark theme - updated for swapped layout
+        axes = [self.ax1, self.ax2, self.ax3, self.ax4, self.ax5, self.ax6]
+        titles = ['Right Hip Position (rad)', 'Right Hip Velocity (rad/s)', 'Right Hip Torques (N⋅m)',
+                 'Right Knee Position (rad)', 'Right Knee Velocity (rad/s)', 'Right Knee Torques (N⋅m)']
+        ylabels = ['Position (rad)', 'Velocity (rad/s)', 'Torque (N⋅m)', 
+                  'Position (rad)', 'Velocity (rad/s)', 'Torque (N⋅m)']
         
-        self.ax2.set_title('Right Knee Position (rad)')
-        self.ax2.set_xlabel('Time (s)')
-        self.ax2.set_ylabel('Position (rad)')
-        self.ax2.grid(True)
-        self.ax2.legend()
-        
-        self.ax3.set_title('Right Hip Velocity (rad/s)')
-        self.ax3.set_xlabel('Time (s)')
-        self.ax3.set_ylabel('Velocity (rad/s)')
-        self.ax3.grid(True)
-        self.ax3.legend()
-        
-        self.ax4.set_title('Right Knee Velocity (rad/s)')
-        self.ax4.set_xlabel('Time (s)')
-        self.ax4.set_ylabel('Velocity (rad/s)')
-        self.ax4.grid(True)
-        self.ax4.legend()
-        
-        self.ax5.set_title('Right Hip Torques (N⋅m)')
-        self.ax5.set_xlabel('Time (s)')
-        self.ax5.set_ylabel('Torque (N⋅m)')
-        self.ax5.grid(True)
-        self.ax5.legend()
-        
-        self.ax6.set_title('Right Knee Torques (N⋅m)')
-        self.ax6.set_xlabel('Time (s)')
-        self.ax6.set_ylabel('Torque (N⋅m)')
-        self.ax6.grid(True)
-        self.ax6.legend()
+        for i, ax in enumerate(axes):
+            ax.set_facecolor('black')
+            ax.set_title(titles[i], color='white')
+            ax.set_xlabel('Time (s)', color='white')
+            ax.set_ylabel(ylabels[i], color='white')
+            ax.grid(True, color='gray', alpha=0.3)
+            ax.tick_params(colors='white')
+            # Create legend with compatible parameters
+            legend = ax.legend(facecolor='black', edgecolor='white')
+            # Set legend text color manually for compatibility
+            for text in legend.get_texts():
+                text.set_color('white')
         
         plt.tight_layout()
         
@@ -192,18 +176,18 @@ class SystemPlotter:
             rknee_motor_torque_data = np.array([])
             torque_time_data = np.array([])
         
-        # Update line data
-        self.line1.set_data(time_data, rhip_pos_data)
+        # Update line data (positions swapped to match new layout)
+        self.line1.set_data(time_data, rhip_pos_data)  # ax1: Hip Position
         self.line1_current.set_data(state_time_data, rhip_pos_current_data)
-        self.line2.set_data(time_data, rknee_pos_data)
-        self.line2_current.set_data(state_time_data, rknee_pos_current_data)
-        self.line3.set_data(time_data, rhip_vel_data)
+        self.line3.set_data(time_data, rhip_vel_data)  # ax2: Hip Velocity  
         self.line3_current.set_data(state_time_data, rhip_vel_current_data)
-        self.line4.set_data(time_data, rknee_vel_data)
-        self.line4_current.set_data(state_time_data, rknee_vel_current_data)
-        self.line5.set_data(torque_time_data, rhip_ff_torque_data)
+        self.line5.set_data(torque_time_data, rhip_ff_torque_data)  # ax3: Hip Torques
         self.line5b.set_data(torque_time_data, rhip_motor_torque_data)
-        self.line6.set_data(torque_time_data, rknee_ff_torque_data)
+        self.line2.set_data(time_data, rknee_pos_data)  # ax4: Knee Position
+        self.line2_current.set_data(state_time_data, rknee_pos_current_data)
+        self.line4.set_data(time_data, rknee_vel_data)  # ax5: Knee Velocity
+        self.line4_current.set_data(state_time_data, rknee_vel_current_data)
+        self.line6.set_data(torque_time_data, rknee_ff_torque_data)  # ax6: Knee Torques
         self.line6b.set_data(torque_time_data, rknee_motor_torque_data)
         
         # Auto-scale axes
@@ -211,46 +195,48 @@ class SystemPlotter:
             time_min, time_max = time_data.min(), time_data.max()
             time_range = max(time_max - time_min, 1.0)
             
-            # Position plots (include both reference and current data for scaling)
+            # Hip position plot (ax1)
             rhip_pos_combined = np.concatenate([rhip_pos_data, rhip_pos_current_data]) if len(rhip_pos_current_data) > 0 else rhip_pos_data
             rhip_pos_min, rhip_pos_max = rhip_pos_combined.min(), rhip_pos_combined.max()
             rhip_pos_range = max(rhip_pos_max - rhip_pos_min, 0.1)
             self.ax1.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
             self.ax1.set_ylim(rhip_pos_min - 0.1 * rhip_pos_range, rhip_pos_max + 0.1 * rhip_pos_range)
             
-            rknee_pos_combined = np.concatenate([rknee_pos_data, rknee_pos_current_data]) if len(rknee_pos_current_data) > 0 else rknee_pos_data
-            rknee_pos_min, rknee_pos_max = rknee_pos_combined.min(), rknee_pos_combined.max()
-            rknee_pos_range = max(rknee_pos_max - rknee_pos_min, 0.1)
-            self.ax2.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
-            self.ax2.set_ylim(rknee_pos_min - 0.1 * rknee_pos_range, rknee_pos_max + 0.1 * rknee_pos_range)
-            
-            # Velocity plots (include both reference and current data for scaling)
+            # Hip velocity plot (ax2) 
             rhip_vel_combined = np.concatenate([rhip_vel_data, rhip_vel_current_data]) if len(rhip_vel_current_data) > 0 else rhip_vel_data
             rhip_vel_min, rhip_vel_max = rhip_vel_combined.min(), rhip_vel_combined.max()
             rhip_vel_range = max(rhip_vel_max - rhip_vel_min, 0.1)
-            self.ax3.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
-            self.ax3.set_ylim(rhip_vel_min - 0.1 * rhip_vel_range, rhip_vel_max + 0.1 * rhip_vel_range)
+            self.ax2.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
+            self.ax2.set_ylim(rhip_vel_min - 0.1 * rhip_vel_range, rhip_vel_max + 0.1 * rhip_vel_range)
             
+            # Knee position plot (ax4)
+            rknee_pos_combined = np.concatenate([rknee_pos_data, rknee_pos_current_data]) if len(rknee_pos_current_data) > 0 else rknee_pos_data
+            rknee_pos_min, rknee_pos_max = rknee_pos_combined.min(), rknee_pos_combined.max()
+            rknee_pos_range = max(rknee_pos_max - rknee_pos_min, 0.1)
+            self.ax4.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
+            self.ax4.set_ylim(rknee_pos_min - 0.1 * rknee_pos_range, rknee_pos_max + 0.1 * rknee_pos_range)
+            
+            # Knee velocity plot (ax5)
             rknee_vel_combined = np.concatenate([rknee_vel_data, rknee_vel_current_data]) if len(rknee_vel_current_data) > 0 else rknee_vel_data
             rknee_vel_min, rknee_vel_max = rknee_vel_combined.min(), rknee_vel_combined.max()
             rknee_vel_range = max(rknee_vel_max - rknee_vel_min, 0.1)
-            self.ax4.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
-            self.ax4.set_ylim(rknee_vel_min - 0.1 * rknee_vel_range, rknee_vel_max + 0.1 * rknee_vel_range)
+            self.ax5.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
+            self.ax5.set_ylim(rknee_vel_min - 0.1 * rknee_vel_range, rknee_vel_max + 0.1 * rknee_vel_range)
             
             # Torque plots auto-scaling
             if len(torque_time_data) > 0:
                 torque_time_min, torque_time_max = torque_time_data.min(), torque_time_data.max()
                 torque_time_range = max(torque_time_max - torque_time_min, 1.0)
                 
-                # Hip torques
+                # Hip torques (ax3)
                 if len(rhip_ff_torque_data) > 0 and len(rhip_motor_torque_data) > 0:
                     hip_torque_combined = np.concatenate([rhip_ff_torque_data, rhip_motor_torque_data])
                     hip_torque_min, hip_torque_max = hip_torque_combined.min(), hip_torque_combined.max()
                     hip_torque_range = max(hip_torque_max - hip_torque_min, 0.1)
-                    self.ax5.set_xlim(torque_time_min - 0.1 * torque_time_range, torque_time_max + 0.1 * torque_time_range)
-                    self.ax5.set_ylim(hip_torque_min - 0.1 * hip_torque_range, hip_torque_max + 0.1 * hip_torque_range)
+                    self.ax3.set_xlim(torque_time_min - 0.1 * torque_time_range, torque_time_max + 0.1 * torque_time_range)
+                    self.ax3.set_ylim(hip_torque_min - 0.1 * hip_torque_range, hip_torque_max + 0.1 * hip_torque_range)
                 
-                # Knee torques
+                # Knee torques (ax6)
                 if len(rknee_ff_torque_data) > 0 and len(rknee_motor_torque_data) > 0:
                     knee_torque_combined = np.concatenate([rknee_ff_torque_data, rknee_motor_torque_data])
                     knee_torque_min, knee_torque_max = knee_torque_combined.min(), knee_torque_combined.max()

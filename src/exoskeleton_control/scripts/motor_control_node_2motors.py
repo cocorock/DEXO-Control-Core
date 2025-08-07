@@ -51,14 +51,24 @@ class FeedforwardTorqueCalculator:
             alpha: Low-pass filter coefficient for acceleration (0-1)
         """
         # Physical parameters (same as MATLAB)
-        self.m1 = 8.0      # Link 1 mass [kg]
-        self.m2 = 3.7      # Link 2 mass [kg] 
+        # self.m1 = 8.0      # Link 1 mass [kg]
+        # self.m2 = 3.7      # Link 2 mass [kg] 
+        # self.l1 = 0.38     # Link 1 length [m]
+        # self.lc1 = 0.2     # Link 1 center of mass [m]
+        # self.lc2 = 0.2     # Link 2 center of mass [m]
+        # self.I1 = 0.13     # Link 1 inertia [kg⋅m²]
+        # self.I2 = 0.05     # Link 2 inertia [kg⋅m²]
+        # self.g = 9.81      # Gravity [m/s²]
+
+        self.m1 = 0.01      # Link 1 mass [kg]
+        self.m2 = 0.01     # Link 2 mass [kg] 
         self.l1 = 0.38     # Link 1 length [m]
         self.lc1 = 0.2     # Link 1 center of mass [m]
         self.lc2 = 0.2     # Link 2 center of mass [m]
         self.I1 = 0.13     # Link 1 inertia [kg⋅m²]
         self.I2 = 0.05     # Link 2 inertia [kg⋅m²]
         self.g = 9.81      # Gravity [m/s²]
+        
 
         # Acceleration estimation parameters
         self.dt = dt
@@ -800,7 +810,7 @@ class MotorControlNode:
             # center_position = (config.min_limit + config.max_limit) / 2.0
             state.p_in = 0.0
             state.v_in = 0.0
-            state.kp_in = config.gains['trajectory']['kp']  # Use trajectory gains for positioning
+            state.kp_in = config.gains['calibration']['kp']  # Use trajectory gains for positioning
             state.kd_in = config.gains['trajectory']['kd']
             state.t_in = 0.0
             

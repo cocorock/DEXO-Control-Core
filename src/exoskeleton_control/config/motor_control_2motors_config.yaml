@@ -20,7 +20,7 @@ calibration:
   # positive_limit_torque: torque applied when moving to positive limit (typically positive value)
   compensation_torques:
     right_hip:  [0.0, 0.0] #[6.0, 12.0]      # [-Nm, +Nm] for negative/positive limit directions
-    right_knee: [0.0, 0.0]  #[7.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
+    right_knee: [1.0, 1.0]  #[7.0, 0.0]     # [-Nm, +Nm] for negative/positive limit directions
 
 # Motor Hardware Configuration
 motors:
@@ -37,14 +37,14 @@ motors:
 # Control Gains per Motor
 control_gains:
   right_hip:
-    calibration: {kp: 0.0, kd: 5.0}
+    calibration: {kp: 5.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 9.0, kd: 1.0}
+    trajectory:  {kp: 25.0, kd: 5.0}
   
   right_knee:
-    calibration: {kp: 0.0, kd: 5.0}
+    calibration: {kp: 5.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 5.0, kd: 1.0}
+    trajectory:  {kp: 30.0, kd: 5.0}
 
 # =====================================================================
 # TRAJECTORY GENERATOR CONFIGURATION
@@ -52,7 +52,7 @@ control_gains:
 
 trajectory_generator:
   # Timing Configuration
-  control_frequency: 100         # Hz, synchronized with motor control
+  control_frequency: 200         # Hz, synchronized with motor control
   
   # Leg Kinematics (meters)
   leg_parameters:

@@ -161,7 +161,7 @@ def create_time_series_plot(x_data, y_data, title_prefix, y_label, save_prefix=N
 def main():
     """Main function to process gait data and create plots"""
     # Load the JSON data
-    filename = 'src/exoskeleton_control/data/gait_data_39_1.json'
+    filename = 'gait_data_39_1.json'
     data = load_gait_data(filename)
 
     if data is None:
