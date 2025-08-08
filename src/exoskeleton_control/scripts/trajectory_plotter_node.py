@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from collections import deque
 import numpy as np
+import math
 from exoskeleton_control.msg import JointsTrajectory, Torques, ExoskeletonState
 
 class SystemPlotter:
@@ -73,10 +74,10 @@ class SystemPlotter:
         
         # Configure axes with dark theme - updated for swapped layout
         axes = [self.ax1, self.ax2, self.ax3, self.ax4, self.ax5, self.ax6]
-        titles = ['Right Hip Position (rad)', 'Right Hip Velocity (rad/s)', 'Right Hip Torques (N⋅m)',
-                 'Right Knee Position (rad)', 'Right Knee Velocity (rad/s)', 'Right Knee Torques (N⋅m)']
-        ylabels = ['Position (rad)', 'Velocity (rad/s)', 'Torque (N⋅m)', 
-                  'Position (rad)', 'Velocity (rad/s)', 'Torque (N⋅m)']
+        titles = ['Right Hip Position (deg)', 'Right Hip Velocity (deg/s)', 'Right Hip Torques (N⋅m)',
+                 'Right Knee Position (deg)', 'Right Knee Velocity (deg/s)', 'Right Knee Torques (N⋅m)']
+        ylabels = ['Position (deg)', 'Velocity (deg/s)', 'Torque (N⋅m)', 
+                  'Position (deg)', 'Velocity (deg/s)', 'Torque (N⋅m)']
         
         for i, ax in enumerate(axes):
             ax.set_facecolor('black')
@@ -108,21 +109,22 @@ class SystemPlotter:
         
         relative_time = current_time - self.start_time
         
-        # Store data in buffers
+        # Store data in buffers (convert positions and velocities to degrees)
         self.time_buffer.append(relative_time)
-        self.rhip_pos_buffer.append(msg.Rhip_pos_ref)
-        self.rknee_pos_buffer.append(msg.Rknee_pos_ref)
-        self.rhip_vel_buffer.append(msg.Rhip_vel_ref)
-        self.rknee_vel_buffer.append(msg.Rknee_vel_ref)
+        self.rhip_pos_buffer.append(math.degrees(msg.Rhip_pos_ref))
+        self.rknee_pos_buffer.append(math.degrees(msg.Rknee_pos_ref))
+        self.rhip_vel_buffer.append(math.degrees(msg.Rhip_vel_ref))
+        self.rknee_vel_buffer.append(math.degrees(msg.Rknee_vel_ref))
     
     def state_callback(self, msg):
         """Process current state data from motor control node."""
         # Only store current state if we have trajectory data (same time buffer)
+        # Convert positions and velocities to degrees
         if len(self.time_buffer) > 0:
-            self.rhip_pos_current_buffer.append(msg.Rhip_pos_st)
-            self.rknee_pos_current_buffer.append(msg.Rknee_pos_st)
-            self.rhip_vel_current_buffer.append(msg.Rhip_vel_st)
-            self.rknee_vel_current_buffer.append(msg.Rknee_vel_st)
+            self.rhip_pos_current_buffer.append(math.degrees(msg.Rhip_pos_st))
+            self.rknee_pos_current_buffer.append(math.degrees(msg.Rknee_pos_st))
+            self.rhip_vel_current_buffer.append(math.degrees(msg.Rhip_vel_st))
+            self.rknee_vel_current_buffer.append(math.degrees(msg.Rknee_vel_st))
     
     def torques_callback(self, msg):
         """Process torque data from motor control node."""
@@ -198,28 +200,28 @@ class SystemPlotter:
             # Hip position plot (ax1)
             rhip_pos_combined = np.concatenate([rhip_pos_data, rhip_pos_current_data]) if len(rhip_pos_current_data) > 0 else rhip_pos_data
             rhip_pos_min, rhip_pos_max = rhip_pos_combined.min(), rhip_pos_combined.max()
-            rhip_pos_range = max(rhip_pos_max - rhip_pos_min, 0.1)
+            rhip_pos_range = max(rhip_pos_max - rhip_pos_min, 1.0)  # Use 1 degree minimum range
             self.ax1.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
             self.ax1.set_ylim(rhip_pos_min - 0.1 * rhip_pos_range, rhip_pos_max + 0.1 * rhip_pos_range)
             
             # Hip velocity plot (ax2) 
             rhip_vel_combined = np.concatenate([rhip_vel_data, rhip_vel_current_data]) if len(rhip_vel_current_data) > 0 else rhip_vel_data
             rhip_vel_min, rhip_vel_max = rhip_vel_combined.min(), rhip_vel_combined.max()
-            rhip_vel_range = max(rhip_vel_max - rhip_vel_min, 0.1)
+            rhip_vel_range = max(rhip_vel_max - rhip_vel_min, 1.0)  # Use 1 deg/s minimum range
             self.ax2.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
             self.ax2.set_ylim(rhip_vel_min - 0.1 * rhip_vel_range, rhip_vel_max + 0.1 * rhip_vel_range)
             
             # Knee position plot (ax4)
             rknee_pos_combined = np.concatenate([rknee_pos_data, rknee_pos_current_data]) if len(rknee_pos_current_data) > 0 else rknee_pos_data
             rknee_pos_min, rknee_pos_max = rknee_pos_combined.min(), rknee_pos_combined.max()
-            rknee_pos_range = max(rknee_pos_max - rknee_pos_min, 0.1)
+            rknee_pos_range = max(rknee_pos_max - rknee_pos_min, 1.0)  # Use 1 degree minimum range
             self.ax4.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
             self.ax4.set_ylim(rknee_pos_min - 0.1 * rknee_pos_range, rknee_pos_max + 0.1 * rknee_pos_range)
             
             # Knee velocity plot (ax5)
             rknee_vel_combined = np.concatenate([rknee_vel_data, rknee_vel_current_data]) if len(rknee_vel_current_data) > 0 else rknee_vel_data
             rknee_vel_min, rknee_vel_max = rknee_vel_combined.min(), rknee_vel_combined.max()
-            rknee_vel_range = max(rknee_vel_max - rknee_vel_min, 0.1)
+            rknee_vel_range = max(rknee_vel_max - rknee_vel_min, 1.0)  # Use 1 deg/s minimum range
             self.ax5.set_xlim(time_min - 0.1 * time_range, time_max + 0.1 * time_range)
             self.ax5.set_ylim(rknee_vel_min - 0.1 * rknee_vel_range, rknee_vel_max + 0.1 * rknee_vel_range)
             

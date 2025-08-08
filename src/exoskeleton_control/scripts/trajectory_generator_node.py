@@ -51,16 +51,16 @@ class TrajectoryGeneratorNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Control parameters
-            self.control_frequency = rospy.get_param('~control_frequency', 200)  # 200Hz to match motor control
+            self.control_frequency = rospy.get_param('~control_frequency', 25)  # 25Hz for half-speed trajectory execution
             
             # Arm/leg parameters
-            self.L1 = rospy.get_param('~leg_parameters/L1', 0.44)  # Thigh length (m)
-            self.L2 = rospy.get_param('~leg_parameters/L2', 0.44)  # Shin length (m)
+            self.L1 = rospy.get_param('~leg_parameters/L1', 0.425)  # Thigh length (m)
+            self.L2 = rospy.get_param('~leg_parameters/L2', 0.45)  # Shin length (m)
 
             # Joint limits (in radians)
-            self.theta1_min = math.radians(rospy.get_param('~joint_limits/hip_min_deg', -30))
-            self.theta1_max = math.radians(rospy.get_param('~joint_limits/hip_max_deg', 90))
-            self.theta2_min = math.radians(rospy.get_param('~joint_limits/knee_min_deg', -100))
+            self.theta1_min = math.radians(rospy.get_param('~joint_limits/hip_min_deg', -10))
+            self.theta1_max = math.radians(rospy.get_param('~joint_limits/hip_max_deg', 50))
+            self.theta2_min = math.radians(rospy.get_param('~joint_limits/knee_min_deg', -60))
             self.theta2_max = math.radians(rospy.get_param('~joint_limits/knee_max_deg', 0))
 
             # Trajectory file path
@@ -71,18 +71,18 @@ class TrajectoryGeneratorNode:
             self.trajectory_scale = rospy.get_param('~trajectory_scale', 1.0)  # Scale factor for positions
             
             # Error codes
-            self.ERROR_UNREACHABLE = -333.0
-            self.ERROR_JOINT_LIMITS = -444.0
+            self.ERROR_UNREACHABLE  = -0.123
+            self.ERROR_JOINT_LIMITS = -0.321
 
             rospy.loginfo("t: Trajectory generator configuration loaded successfully")
 
         except Exception as e:
-            rospy.logerr(f"Error loading configuration: {e}")
+            rospy.logerr(f"T: Error loading configuration: {e}")
             self.set_default_configuration()
 
     def set_default_configuration(self):
         """Set default configuration values."""
-        self.control_frequency = 200
+        self.control_frequency = 25
         self.L1 = 0.38  # Thigh length
         self.L2 = 0.42  # Shin length
         self.theta1_min = math.radians(-31)
@@ -92,8 +92,8 @@ class TrajectoryGeneratorNode:
         self.trajectory_file = 'trajectory.json'
         self.loop_trajectory = True
         self.trajectory_scale = 1.0
-        self.ERROR_UNREACHABLE = -333.0
-        self.ERROR_JOINT_LIMITS = -444.0
+        self.ERROR_UNREACHABLE  = -0.123
+        self.ERROR_JOINT_LIMITS = -0.321
 
     def load_trajectory_from_json(self):
         """Load trajectory data from JSON file based on the provided structure."""
@@ -134,22 +134,20 @@ class TrajectoryGeneratorNode:
             demo_data = raw_data[0]
             
             # Validate required fields
-            required_fields = ['time', 'ankle_pos_FR1', 'ankle_pos_FR1_velocity']
+            required_fields = ['ankle_pos_FR1', 'ankle_pos_FR1_velocity']
             for field in required_fields:
                 if field not in demo_data:
                     rospy.logerr(f"Missing required field: {field}")
                     return False
 
             # Extract trajectory data
-            time_data = demo_data['time']
             ankle_pos_data = demo_data['ankle_pos_FR1']  # Right leg ankle positions
             ankle_vel_data = demo_data['ankle_pos_FR1_velocity']  # Right leg ankle velocities
             
-            self.trajectory_length = len(time_data)
+            self.trajectory_length = len(ankle_pos_data)
             
             # Process trajectory data
             self.trajectory_data = {
-                'time': [],
                 'positions': [],  # [hip_pos, knee_pos] for each timestep
                 'velocities': []  # [hip_vel, knee_vel] for each timestep
             }
@@ -159,12 +157,6 @@ class TrajectoryGeneratorNode:
             successful_points = 0
             for i in range(self.trajectory_length):
                 try:
-                    # Extract time (nested array structure: [[time]])
-                    if isinstance(time_data[i], list) and len(time_data[i]) > 0:
-                        time_val = time_data[i][0]
-                    else:
-                        time_val = float(i) * 0.01  # Default 100Hz if time format is wrong
-                    
                     # Extract ankle position (nested array structure: [[x, y]])
                     if (isinstance(ankle_pos_data[i], list) and len(ankle_pos_data[i]) >= 2):
                         ankle_x = ankle_pos_data[i][0] * self.trajectory_scale
@@ -175,8 +167,8 @@ class TrajectoryGeneratorNode:
                     
                     # Extract ankle velocity (nested array structure: [[vx, vy]])
                     if (isinstance(ankle_vel_data[i], list) and len(ankle_vel_data[i]) >= 2):
-                        ankle_vx = ankle_vel_data[i][0] * self.trajectory_scale
-                        ankle_vy = ankle_vel_data[i][1] * self.trajectory_scale
+                        ankle_vx = ankle_vel_data[i][0] * self.trajectory_scale * 0.25  # Scale by 0.5 for half-speed
+                        ankle_vy = ankle_vel_data[i][1] * self.trajectory_scale * 0.25  # Scale by 0.5 for half-speed
                     else:
                         rospy.logwarn(f"Invalid ankle velocity data at index {i}")
                         continue
@@ -203,7 +195,6 @@ class TrajectoryGeneratorNode:
                     )
                     
                     # Store processed data
-                    self.trajectory_data['time'].append(time_val)
                     self.trajectory_data['positions'].append([theta_hip, theta_knee])
                     self.trajectory_data['velocities'].append([joint_vx, joint_vy])
                     
@@ -218,7 +209,7 @@ class TrajectoryGeneratorNode:
                 return False
             
             self.trajectory_length = successful_points
-            rospy.loginfo(f"t: Successfully processed {successful_points}/{len(time_data)} trajectory points")
+            rospy.loginfo(f"t: Successfully processed {successful_points}/{len(ankle_pos_data)} trajectory points")
             
             # Log some statistics
             if self.trajectory_data['positions']:
@@ -445,7 +436,8 @@ class TrajectoryGeneratorNode:
         # Get current point
         current_pos = self.trajectory_data['positions'][self.current_trajectory_index]
         current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
-        current_time = self.trajectory_data['time'][self.current_trajectory_index]
+        # Calculate time based on current index and node frequency
+        current_time = float(self.current_trajectory_index) / self.control_frequency
         
         # Advance index
         self.current_trajectory_index += 1
@@ -494,8 +486,7 @@ class TrajectoryGeneratorNode:
         # Set values based on system state
         if self.system_state == "READY":
             # READY state: publish first trajectory position with zero velocities
-            # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-            modified_hip_pos = -first_pos[0] - math.radians(18)
+            modified_hip_pos = first_pos[0]
             trajectory_msg.Rhip_pos_ref  = modified_hip_pos
             trajectory_msg.Rknee_pos_ref = first_pos[1]
             trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity for safety
@@ -512,9 +503,8 @@ class TrajectoryGeneratorNode:
                 current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
                 
                 # Right leg data from trajectory
-                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-                modified_hip_pos = -current_pos[0] - math.radians(18)
-                modified_hip_vel = -current_vel[0]  # Also invert hip velocity
+                modified_hip_pos = current_pos[0]
+                modified_hip_vel = current_vel[0]  # Also invert hip velocity
                 trajectory_msg.Rhip_pos_ref  = modified_hip_pos  # Hip position
                 trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
                 trajectory_msg.Rhip_vel_ref  = modified_hip_vel  # Hip velocity
@@ -535,7 +525,7 @@ class TrajectoryGeneratorNode:
             else:
                 # Fallback to first trajectory position if no active trajectory
                 # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-                modified_hip_pos = -first_pos[0] - math.radians(18)
+                modified_hip_pos = first_pos[0]
                 trajectory_msg.Rhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Rknee_pos_ref = first_pos[1]
                 trajectory_msg.Rhip_vel_ref  = 0.0
@@ -552,9 +542,9 @@ class TrajectoryGeneratorNode:
                 current_vel = self.trajectory_data['velocities'][self.current_trajectory_index]
                 
                 # Right leg data from trajectory
-                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-                modified_hip_pos = -current_pos[0] - math.radians(18)
-                modified_hip_vel = -current_vel[0]  # Also invert hip velocity
+     
+                modified_hip_pos = current_pos[0]
+                modified_hip_vel = current_vel[0]  # Also invert hip velocity
                 trajectory_msg.Rhip_pos_ref  = modified_hip_pos  # Hip position
                 trajectory_msg.Rknee_pos_ref = current_pos[1]  # Knee position
                 trajectory_msg.Rhip_vel_ref  = modified_hip_vel  # Hip velocity
@@ -574,8 +564,7 @@ class TrajectoryGeneratorNode:
                                  f"hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
             else:
                 # Trajectory finished in STOPPING state - use first position until state change
-                # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-                modified_hip_pos = -first_pos[0] - math.radians(18)
+                modified_hip_pos = first_pos[0]
                 trajectory_msg.Rhip_pos_ref  = modified_hip_pos
                 trajectory_msg.Rknee_pos_ref = first_pos[1]
                 trajectory_msg.Rhip_vel_ref  = 0.0  # Zero velocity when stopped
@@ -586,8 +575,7 @@ class TrajectoryGeneratorNode:
                 trajectory_msg.Lknee_vel_ref = 0.0   # Zero velocity when stopped
         else:
             # All other states (INIT, CALIBRATION_PROCESS, E_STOP): use same as READY
-            # Apply hip angle modification: multiply by -1 and subtract 18 degrees
-            modified_hip_pos = -first_pos[0] - math.radians(18)
+            modified_hip_pos = first_pos[0]
             trajectory_msg.Rhip_pos_ref  = modified_hip_pos
             trajectory_msg.Rknee_pos_ref = first_pos[1]
             trajectory_msg.Rhip_vel_ref  = 0.0

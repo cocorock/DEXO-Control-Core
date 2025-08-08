@@ -43,7 +43,7 @@ def create_interactive_plot(x_data, y_data, title, xlabel, ylabel, save_name=Non
     # Add cursor for interactivity
     cursor = Cursor(ax, useblit=True, color='red', linewidth=1)
 
-    # Add annotation for displaying values
+    # Add annotation for displaying values1
     annot = ax.annotate('', xy=(0,0), xytext=(20,20), textcoords="offset points",
                        bbox=dict(boxstyle="round", fc="w", alpha=0.8),
                        arrowprops=dict(arrowstyle="->"))
@@ -161,11 +161,14 @@ def create_time_series_plot(x_data, y_data, title_prefix, y_label, save_prefix=N
 def main():
     """Main function to process gait data and create plots"""
     # Load the JSON data
-    filename = 'gait_data_39_1.json'
+    filename = 'Subject#35_T2_V0.5_200P.json'
     data = load_gait_data(filename)
 
     if data is None:
         return
+    
+    # Extract filename without extension for use in saved plot names
+    filename_base = os.path.splitext(os.path.basename(filename))[0]
 
     # Extract the main object from the list
     if isinstance(data, list) and len(data) > 0:
@@ -203,7 +206,7 @@ def main():
             if x_pos and y_pos:
                 # Create plots
                 clean_name = pos_key.replace('_', ' ').title()
-                save_prefix = os.path.join(output_dir, pos_key)
+                save_prefix = os.path.join(output_dir, f'{filename_base}_{pos_key}')
 
                 # X vs Y trajectory plot
                 create_xy_trajectory_plot(x_pos, y_pos, 
@@ -227,7 +230,7 @@ def main():
             if x_vel and y_vel:
                 # Create plots
                 clean_name = vel_key.replace('_', ' ').title()
-                save_prefix = os.path.join(output_dir, vel_key)
+                save_prefix = os.path.join(output_dir, f'{filename_base}_{vel_key}')
 
                 # X vs Y velocity plot
                 create_xy_trajectory_plot(x_vel, y_vel,

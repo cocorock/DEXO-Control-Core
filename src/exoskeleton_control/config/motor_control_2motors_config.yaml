@@ -10,7 +10,7 @@
 # Calibration Parameters
 calibration:
   sequence: [1, 2]               # Calibration order: Right hip (1), Right knee (2)
-  speed_deg: 30.0                # Calibration speed in degrees/second (0.52 rad/s)
+  speed_deg: 90.0                # Calibration speed in degrees/second (0.52 rad/s)
   max_time: 30.0                 # Maximum calibration time in seconds
   torque_thresholds: [2.0, 2.3]  # Torque thresholds [hip, knee] in Nm
   
@@ -37,14 +37,14 @@ motors:
 # Control Gains per Motor
 control_gains:
   right_hip:
-    calibration: {kp: 5.0, kd: 5.0}
+    calibration: {kp: 5.0, kd: 3.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 25.0, kd: 5.0}
+    trajectory:  {kp: 30.0, kd: 0.0}
   
   right_knee:
     calibration: {kp: 5.0, kd: 5.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 30.0, kd: 5.0}
+    trajectory:  {kp: 20.0, kd: 0.50}
 
 # =====================================================================
 # TRAJECTORY GENERATOR CONFIGURATION
