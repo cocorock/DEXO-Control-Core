@@ -39,7 +39,7 @@ control_gains:
   right_hip:
     calibration: {kp: 5.0, kd: 3.0}
     hold:        {kp: 2.0, kd: 1.5}
-    trajectory:  {kp: 30.0, kd: 0.0}
+    trajectory:  {kp: 30.0, kd: 1.0}
   
   right_knee:
     calibration: {kp: 5.0, kd: 5.0}

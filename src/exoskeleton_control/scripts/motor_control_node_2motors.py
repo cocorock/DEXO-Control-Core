@@ -493,10 +493,18 @@ class MotorControlNode:
         # Enforce joint limits
         for i, motor_id in enumerate([1, 2]):
             config = self.motor_configs[motor_id]
+            # Account for motor direction - when direction is -1, limits are swapped
+            if config.direction == -1:
+                min_limit = -config.max_angle_rad
+                max_limit = -config.min_angle_rad
+            else:
+                min_limit = config.min_angle_rad
+                max_limit = config.max_angle_rad
+            
             self.desired_positions[i] = np.clip(
                 self.desired_positions[i], 
-                config.min_angle_rad, 
-                config.max_angle_rad
+                min_limit, 
+                max_limit
             )
 
         self.trajectory_active = True
@@ -1032,10 +1040,18 @@ class MotorControlNode:
                     
                     if self.trajectory_active and config.is_calibrated:
                         # Clip desired position to calibrated limits
+                        # Account for motor direction - when direction is -1, limits are swapped
+                        if config.direction == -1:
+                            min_limit = -config.max_limit
+                            max_limit = -config.min_limit
+                        else:
+                            min_limit = config.min_limit
+                            max_limit = config.max_limit
+                        
                         desired_pos = np.clip(
                             self.desired_positions[i],
-                            config.min_limit,
-                            config.max_limit
+                            min_limit,
+                            max_limit
                         )
                         
                         # Debug logging for trajectory commands

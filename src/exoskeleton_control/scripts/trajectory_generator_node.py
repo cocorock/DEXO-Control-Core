@@ -51,7 +51,7 @@ class TrajectoryGeneratorNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Control parameters
-            self.control_frequency = rospy.get_param('~control_frequency', 25)  # 25Hz for half-speed trajectory execution
+            self.control_frequency = rospy.get_param('~control_frequency', 100)  # 25Hz for half-speed trajectory execution
             
             # Arm/leg parameters
             self.L1 = rospy.get_param('~leg_parameters/L1', 0.425)  # Thigh length (m)

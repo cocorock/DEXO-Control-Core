@@ -47,7 +47,7 @@
 
   <!-- Trajectory Generator Node -->
   <node name="trajectory_generator_node" pkg="exoskeleton_control" type="trajectory_generator_node.py" output="screen">
-    <param name="trajectory_file" value="$(find exoskeleton_control)/data/Subject#35_T2_V0.5_800P.json"/>
+    <param name="trajectory_file" value="$(find exoskeleton_control)/data/new_processed_gait_data#35_1_p400.json"/>
     <remap from="gait_params" to="/exoskeleton/gait_params"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="fsm_state" to="/exoskeleton/fsm_state"/>
