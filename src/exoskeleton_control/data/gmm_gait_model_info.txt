@@ -1,0 +1,11 @@
+=== GMM Gait Model Info ===
+
+Components: 12
+Total dimension: 6
+Demonstrations: 8
+Training points: 800
+
+Metrics:
+  log_likelihood: 16.92
+  bic: -24826.34
+  aic: -26395.68
