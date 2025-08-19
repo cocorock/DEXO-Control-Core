@@ -1,0 +1,195 @@
+JSON STRUCTURE ANALYSIS
+==================================================
+Maximum nesting depth: 5
+Type distribution: {'array': 461, 'object': 5, 'int': 55, 'float': 550}
+
+DETAILED STRUCTURE:
+------------------------------
+📋 ARRAY at root
+   Length: 8
+   Item types: ['object']
+   Homogeneous: True
+   Items structure:
+    📁 OBJECT at root[0]
+       Properties: 13
+       Required fields: ['demonstration_index', 'time', 'pelvis_orientation', 'ankle_pos_FR1', 'ankle_pos_FR1_velocity', 'ankle_orientation_FR1', 'ankle_pos_FR2', 'ankle_pos_FR2_velocity', 'ankle_orientation_FR2', 'ankle_A_FR1', 'ankle_b_FR1', 'ankle_A_FR2', 'ankle_b_FR2']
+       └── demonstration_index:
+        🔹 INT at root[0].demonstration_index
+           Value: 0
+       └── time:
+        📋 ARRAY at root[0].time
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].time[0]
+               Length: 1
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].time[0][0]
+                   Value: 0.0
+       └── pelvis_orientation:
+        📋 ARRAY at root[0].pelvis_orientation
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].pelvis_orientation[0]
+               Length: 1
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].pelvis_orientation[0][0]
+                   Value: -0.3355962611284735
+       └── ankle_pos_FR1:
+        📋 ARRAY at root[0].ankle_pos_FR1
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_pos_FR1[0]
+               Length: 2
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_pos_FR1[0][0]
+                   Value: 0.2482851314564993
+       └── ankle_pos_FR1_velocity:
+        📋 ARRAY at root[0].ankle_pos_FR1_velocity
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_pos_FR1_velocity[0]
+               Length: 2
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_pos_FR1_velocity[0][0]
+                   Value: -0.18001846098241125
+       └── ankle_orientation_FR1:
+        📋 ARRAY at root[0].ankle_orientation_FR1
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_orientation_FR1[0]
+               Length: 1
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_orientation_FR1[0][0]
+                   Value: 0.13406948418286782
+       └── ankle_pos_FR2:
+        📋 ARRAY at root[0].ankle_pos_FR2
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_pos_FR2[0]
+               Length: 2
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_pos_FR2[0][0]
+                   Value: -1.3737836529996537
+       └── ankle_pos_FR2_velocity:
+        📋 ARRAY at root[0].ankle_pos_FR2_velocity
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_pos_FR2_velocity[0]
+               Length: 2
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_pos_FR2_velocity[0][0]
+                   Value: 0.44669890652528466
+       └── ankle_orientation_FR2:
+        📋 ARRAY at root[0].ankle_orientation_FR2
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_orientation_FR2[0]
+               Length: 1
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_orientation_FR2[0][0]
+                   Value: 0.13992674389694484
+       └── ankle_A_FR1:
+        📋 ARRAY at root[0].ankle_A_FR1
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_A_FR1[0]
+               Length: 2
+               Item types: ['array']
+               Homogeneous: True
+               Items structure:
+                📋 ARRAY at root[0].ankle_A_FR1[0][0]
+                   Length: 2
+                   Item types: ['float']
+                   Homogeneous: True
+                   Items structure:
+                    🔹 FLOAT at root[0].ankle_A_FR1[0][0][0]
+                       Value: 1.0
+       └── ankle_b_FR1:
+        📋 ARRAY at root[0].ankle_b_FR1
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_b_FR1[0]
+               Length: 2
+               Item types: ['int']
+               Homogeneous: True
+               Items structure:
+                🔹 INT at root[0].ankle_b_FR1[0][0]
+                   Value: 0
+       └── ankle_A_FR2:
+        📋 ARRAY at root[0].ankle_A_FR2
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_A_FR2[0]
+               Length: 2
+               Item types: ['array']
+               Homogeneous: True
+               Items structure:
+                📋 ARRAY at root[0].ankle_A_FR2[0][0]
+                   Length: 2
+                   Item types: ['float']
+                   Homogeneous: True
+                   Items structure:
+                    🔹 FLOAT at root[0].ankle_A_FR2[0][0][0]
+                       Value: 0.9999843749572256
+       └── ankle_b_FR2:
+        📋 ARRAY at root[0].ankle_b_FR2
+           Length: 100
+           Item types: ['array']
+           Homogeneous: True
+           Items structure:
+            📋 ARRAY at root[0].ankle_b_FR2[0]
+               Length: 2
+               Item types: ['float']
+               Homogeneous: True
+               Items structure:
+                🔹 FLOAT at root[0].ankle_b_FR2[0][0]
+                   Value: -1.6321801715720445
+
+PROGRAMMING HINTS:
+------------------------------
+• Access patterns:
+  - data[i] → object
+
+• Validation checks needed:
+  - Check if array is empty before accessing items
+
+• Potential issues:
+  - Large data structure - consider pagination/chunking
