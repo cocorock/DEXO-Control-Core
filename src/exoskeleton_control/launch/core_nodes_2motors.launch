@@ -47,7 +47,7 @@
 
   <!-- Trajectory Generator Node -->
   <node name="trajectory_generator_node" pkg="exoskeleton_control" type="trajectory_generator_node.py" output="screen">
-    <param name="trajectory_file" value="$(find exoskeleton_control)/data/new_processed_gait_data#35_1_p400.json"/>
+    <param name="trajectory_file" value="$(find exoskeleton_control)/data/6ta_processed_gait_data#39_1_p200.json"/>
     <remap from="gait_params" to="/exoskeleton/gait_params"/>
     <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
     <remap from="fsm_state" to="/exoskeleton/fsm_state"/>
@@ -59,6 +59,8 @@
   <node name="trajectory_plotter_node" pkg="exoskeleton_control" type="trajectory_plotter_node.py" output="screen">
     <remap from="/exoskeleton/joints_trajectory" to="/exoskeleton/joints_trajectory"/>
     <remap from="/exoskeleton/torques" to="/exoskeleton/torques"/>
+    <remap from="/exoskeleton/state" to="/exoskeleton/state"/>
+    <remap from="/exoskeleton/emergency_stop" to="/exoskeleton/emergency_stop"/>
   </node>
 
 </launch>

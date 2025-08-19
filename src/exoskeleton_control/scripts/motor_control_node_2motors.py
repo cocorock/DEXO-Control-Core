@@ -60,8 +60,8 @@ class FeedforwardTorqueCalculator:
         # self.I2 = 0.05     # Link 2 inertia [kg⋅m²]
         # self.g = 9.81      # Gravity [m/s²]
 
-        self.m1 = 0.01      # Link 1 mass [kg]
-        self.m2 = 0.01     # Link 2 mass [kg] 
+        self.m1 = 2.0      # Link 1 mass [kg]
+        self.m2 = 1.0     # Link 2 mass [kg] 
         self.l1 = 0.38     # Link 1 length [m]
         self.lc1 = 0.2     # Link 1 center of mass [m]
         self.lc2 = 0.2     # Link 2 center of mass [m]

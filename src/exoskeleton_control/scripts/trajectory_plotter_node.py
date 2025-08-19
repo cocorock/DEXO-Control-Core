@@ -6,14 +6,19 @@ import matplotlib.animation as animation
 from collections import deque
 import numpy as np
 import math
-from exoskeleton_control.msg import JointsTrajectory, Torques, ExoskeletonState
+import os
+import pickle
+from datetime import datetime
+from scipy.io import savemat
+from exoskeleton_control.msg import JointsTrajectory, Torques, ExoskeletonState, EStopTrigger
 
 class SystemPlotter:
     def __init__(self):
         rospy.init_node('system_plotter_node', anonymous=True)
         
         # Buffer size for plotting (number of data points to keep)
-        self.buffer_size = 500
+        # 5 seconds at 200Hz = 1000 data points
+        self.buffer_size = 1000
         
         # Initialize data buffers
         self.time_buffer = deque(maxlen=self.buffer_size)
@@ -26,11 +31,15 @@ class SystemPlotter:
         self.rhip_motor_torque_buffer = deque(maxlen=self.buffer_size)
         self.rknee_motor_torque_buffer = deque(maxlen=self.buffer_size)
         
-        # Current state buffers
+        # Current state buffers with timestamps
         self.rhip_pos_current_buffer = deque(maxlen=self.buffer_size)
         self.rknee_pos_current_buffer = deque(maxlen=self.buffer_size)
         self.rhip_vel_current_buffer = deque(maxlen=self.buffer_size)
         self.rknee_vel_current_buffer = deque(maxlen=self.buffer_size)
+        self.state_time_buffer = deque(maxlen=self.buffer_size)
+        
+        # Torque time buffer
+        self.torque_time_buffer = deque(maxlen=self.buffer_size)
         
         # Initialize start time
         self.start_time = None
@@ -50,6 +59,11 @@ class SystemPlotter:
             '/exoskeleton/state', 
             ExoskeletonState, 
             self.state_callback
+        )
+        self.emergency_stop_sub = rospy.Subscriber(
+            '/exoskeleton/emergency_stop',
+            EStopTrigger,
+            self.emergency_stop_callback
         )
         
         # Setup matplotlib with 2x3 grid and black background
@@ -118,22 +132,122 @@ class SystemPlotter:
     
     def state_callback(self, msg):
         """Process current state data from motor control node."""
-        # Only store current state if we have trajectory data (same time buffer)
-        # Convert positions and velocities to degrees
-        if len(self.time_buffer) > 0:
-            self.rhip_pos_current_buffer.append(math.degrees(msg.Rhip_pos_st))
-            self.rknee_pos_current_buffer.append(math.degrees(msg.Rknee_pos_st))
-            self.rhip_vel_current_buffer.append(math.degrees(msg.Rhip_vel_st))
-            self.rknee_vel_current_buffer.append(math.degrees(msg.Rknee_vel_st))
+        current_time = rospy.get_time()
+        
+        if self.start_time is None:
+            self.start_time = current_time
+        
+        relative_time = current_time - self.start_time
+        
+        # Store state data with synchronized timestamps
+        self.state_time_buffer.append(relative_time)
+        self.rhip_pos_current_buffer.append(math.degrees(msg.Rhip_pos_st))
+        self.rknee_pos_current_buffer.append(math.degrees(msg.Rknee_pos_st))
+        self.rhip_vel_current_buffer.append(math.degrees(msg.Rhip_vel_st))
+        self.rknee_vel_current_buffer.append(math.degrees(msg.Rknee_vel_st))
     
     def torques_callback(self, msg):
         """Process torque data from motor control node."""
+        current_time = rospy.get_time()
+        
+        if self.start_time is None:
+            self.start_time = current_time
+        
+        relative_time = current_time - self.start_time
+        
         if len(msg.torques) >= 4:
+            # Store torque data with synchronized timestamps
+            self.torque_time_buffer.append(relative_time)
             # msg.torques format: [R_hip_ff, R_knee_ff, R_hip_motor, R_knee_motor]
             self.rhip_ff_torque_buffer.append(msg.torques[0])
             self.rknee_ff_torque_buffer.append(msg.torques[1])
             self.rhip_motor_torque_buffer.append(msg.torques[2])
             self.rknee_motor_torque_buffer.append(msg.torques[3])
+    
+    def emergency_stop_callback(self, msg):
+        """Handle emergency stop trigger and save current plot data."""
+        if msg.trigger:
+            rospy.logwarn("Emergency stop triggered - saving plot data...")
+            self.save_emergency_data()
+            rospy.logwarn("Emergency data saved successfully")
+    
+    def save_emergency_data(self):
+        """Save the last 5 seconds of plot data to file."""
+        try:
+            # Create emergency data directory if it doesn't exist
+            emergency_dir = os.path.expanduser("~/emergency_data")
+            if not os.path.exists(emergency_dir):
+                os.makedirs(emergency_dir)
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            mat_filename = os.path.join(emergency_dir, f"emergency_plot_data_{timestamp}.mat")
+            pkl_filename = os.path.join(emergency_dir, f"emergency_plot_data_{timestamp}.pkl")
+            
+            # Collect all current buffer data for MATLAB
+            matlab_data = {
+                'timestamp': timestamp,
+                'buffer_size': float(self.buffer_size),
+                'trajectory_time': np.array(list(self.time_buffer)),
+                'rhip_pos_ref': np.array(list(self.rhip_pos_buffer)),
+                'rknee_pos_ref': np.array(list(self.rknee_pos_buffer)),
+                'rhip_vel_ref': np.array(list(self.rhip_vel_buffer)),
+                'rknee_vel_ref': np.array(list(self.rknee_vel_buffer)),
+                'state_time': np.array(list(self.state_time_buffer)),
+                'rhip_pos_current': np.array(list(self.rhip_pos_current_buffer)),
+                'rknee_pos_current': np.array(list(self.rknee_pos_current_buffer)),
+                'rhip_vel_current': np.array(list(self.rhip_vel_current_buffer)),
+                'rknee_vel_current': np.array(list(self.rknee_vel_current_buffer)),
+                'torque_time': np.array(list(self.torque_time_buffer)),
+                'rhip_ff_torque': np.array(list(self.rhip_ff_torque_buffer)),
+                'rknee_ff_torque': np.array(list(self.rknee_ff_torque_buffer)),
+                'rhip_motor_torque': np.array(list(self.rhip_motor_torque_buffer)),
+                'rknee_motor_torque': np.array(list(self.rknee_motor_torque_buffer))
+            }
+            
+            # Collect all current buffer data for pickle backup
+            emergency_data = {
+                'timestamp': timestamp,
+                'buffer_size': self.buffer_size,
+                'trajectory_data': {
+                    'time': list(self.time_buffer),
+                    'rhip_pos_ref': list(self.rhip_pos_buffer),
+                    'rknee_pos_ref': list(self.rknee_pos_buffer),
+                    'rhip_vel_ref': list(self.rhip_vel_buffer),
+                    'rknee_vel_ref': list(self.rknee_vel_buffer)
+                },
+                'state_data': {
+                    'time': list(self.state_time_buffer),
+                    'rhip_pos_current': list(self.rhip_pos_current_buffer),
+                    'rknee_pos_current': list(self.rknee_pos_current_buffer),
+                    'rhip_vel_current': list(self.rhip_vel_current_buffer),
+                    'rknee_vel_current': list(self.rknee_vel_current_buffer)
+                },
+                'torque_data': {
+                    'time': list(self.torque_time_buffer),
+                    'rhip_ff_torque': list(self.rhip_ff_torque_buffer),
+                    'rknee_ff_torque': list(self.rknee_ff_torque_buffer),
+                    'rhip_motor_torque': list(self.rhip_motor_torque_buffer),
+                    'rknee_motor_torque': list(self.rknee_motor_torque_buffer)
+                },
+                'plot_info': {
+                    'plot_names': ['Right Hip Position', 'Right Hip Velocity', 'Right Hip Torques',
+                                  'Right Knee Position', 'Right Knee Velocity', 'Right Knee Torques'],
+                    'units': ['deg', 'deg/s', 'N⋅m', 'deg', 'deg/s', 'N⋅m']
+                }
+            }
+            
+            # Save data to MATLAB file
+            savemat(mat_filename, matlab_data)
+            rospy.logwarn(f"Emergency plot data saved to MATLAB file: {mat_filename}")
+            
+            # Save backup pickle file
+            with open(pkl_filename, 'wb') as f:
+                pickle.dump(emergency_data, f)
+            rospy.logwarn(f"Emergency plot data backup saved to: {pkl_filename}")
+            
+        except Exception as e:
+            rospy.logerr(f"Failed to save emergency data: {str(e)}")
     
     def animate(self, frame):
         if len(self.time_buffer) < 2:
@@ -148,35 +262,33 @@ class SystemPlotter:
         rhip_vel_data = np.array(self.rhip_vel_buffer)
         rknee_vel_data = np.array(self.rknee_vel_buffer)
         
-        # Current state data (pad with zeros if not enough data)
-        state_min_len = min(len(self.time_buffer), len(self.rhip_pos_current_buffer))
-        if state_min_len > 0:
-            rhip_pos_current_data = np.array(list(self.rhip_pos_current_buffer)[-state_min_len:])
-            rknee_pos_current_data = np.array(list(self.rknee_pos_current_buffer)[-state_min_len:])
-            rhip_vel_current_data = np.array(list(self.rhip_vel_current_buffer)[-state_min_len:])
-            rknee_vel_current_data = np.array(list(self.rknee_vel_current_buffer)[-state_min_len:])
-            state_time_data = time_data[-state_min_len:]
+        # Current state data with independent timestamps
+        if len(self.state_time_buffer) > 0:
+            state_time_data = np.array(self.state_time_buffer)
+            rhip_pos_current_data = np.array(self.rhip_pos_current_buffer)
+            rknee_pos_current_data = np.array(self.rknee_pos_current_buffer)
+            rhip_vel_current_data = np.array(self.rhip_vel_current_buffer)
+            rknee_vel_current_data = np.array(self.rknee_vel_current_buffer)
         else:
+            state_time_data = np.array([])
             rhip_pos_current_data = np.array([])
             rknee_pos_current_data = np.array([])
             rhip_vel_current_data = np.array([])
             rknee_vel_current_data = np.array([])
-            state_time_data = np.array([])
         
-        # Torque data (pad with zeros if not enough data)
-        min_len = min(len(self.time_buffer), len(self.rhip_ff_torque_buffer))
-        if min_len > 0:
-            rhip_ff_torque_data = np.array(list(self.rhip_ff_torque_buffer)[-min_len:])
-            rknee_ff_torque_data = np.array(list(self.rknee_ff_torque_buffer)[-min_len:])
-            rhip_motor_torque_data = np.array(list(self.rhip_motor_torque_buffer)[-min_len:])
-            rknee_motor_torque_data = np.array(list(self.rknee_motor_torque_buffer)[-min_len:])
-            torque_time_data = time_data[-min_len:]
+        # Torque data with independent timestamps
+        if len(self.torque_time_buffer) > 0:
+            torque_time_data = np.array(self.torque_time_buffer)
+            rhip_ff_torque_data = np.array(self.rhip_ff_torque_buffer)
+            rknee_ff_torque_data = np.array(self.rknee_ff_torque_buffer)
+            rhip_motor_torque_data = np.array(self.rhip_motor_torque_buffer)
+            rknee_motor_torque_data = np.array(self.rknee_motor_torque_buffer)
         else:
+            torque_time_data = np.array([])
             rhip_ff_torque_data = np.array([])
             rknee_ff_torque_data = np.array([])
             rhip_motor_torque_data = np.array([])
             rknee_motor_torque_data = np.array([])
-            torque_time_data = np.array([])
         
         # Update line data (positions swapped to match new layout)
         self.line1.set_data(time_data, rhip_pos_data)  # ax1: Hip Position

@@ -51,7 +51,7 @@ class TrajectoryGeneratorNode:
         """Load configuration parameters from ROS parameter server."""
         try:
             # Control parameters
-            self.control_frequency = rospy.get_param('~control_frequency', 100)  # 25Hz for half-speed trajectory execution
+            self.control_frequency = rospy.get_param('~control_frequency', 200)  # 200Hz for high-frequency trajectory execution
             
             # Arm/leg parameters
             self.L1 = rospy.get_param('~leg_parameters/L1', 0.425)  # Thigh length (m)
@@ -167,8 +167,8 @@ class TrajectoryGeneratorNode:
                     
                     # Extract ankle velocity (nested array structure: [[vx, vy]])
                     if (isinstance(ankle_vel_data[i], list) and len(ankle_vel_data[i]) >= 2):
-                        ankle_vx = ankle_vel_data[i][0] * self.trajectory_scale * 0.25  # Scale by 0.5 for half-speed
-                        ankle_vy = ankle_vel_data[i][1] * self.trajectory_scale * 0.25  # Scale by 0.5 for half-speed
+                        ankle_vx = ankle_vel_data[i][0] * self.trajectory_scale * 0.5  # Scale by 0.5 for half-speed
+                        ankle_vy = ankle_vel_data[i][1] * self.trajectory_scale * 0.5  # Scale by 0.5 for half-speed
                     else:
                         rospy.logwarn(f"Invalid ankle velocity data at index {i}")
                         continue
@@ -194,8 +194,11 @@ class TrajectoryGeneratorNode:
                         theta_hip, theta_knee, ankle_vx, ankle_vy
                     )
                     
-                    # Store processed data
-                    self.trajectory_data['positions'].append([theta_hip, theta_knee])
+                    # Add 18 degrees to hip angle
+                    theta_hip_adjusted = theta_hip + math.radians(20.0)
+                    
+                    # Store processed data with adjusted hip angle
+                    self.trajectory_data['positions'].append([theta_hip_adjusted, theta_knee])
                     self.trajectory_data['velocities'].append([joint_vx, joint_vy])
                     
                     successful_points += 1
