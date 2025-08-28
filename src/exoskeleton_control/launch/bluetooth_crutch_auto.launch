@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 
+    Automated Bluetooth Smart Crutch Launch File
+    
+    This launch file includes automatic Bluetooth setup before starting the ROS node.
+    
+    Arguments:
+      - auto_setup (default: true): Whether to run automatic Bluetooth setup
+      - bluetooth_device (default: /dev/rfcomm0): Bluetooth device path
+      - esp32_mac (default: 24:6F:28:D1:36:72): ESP32 MAC address
+      - debug_output (default: true): Enable verbose logging
+  -->
+
+  <!-- Launch arguments -->
+  <arg name="auto_setup" default="true" doc="Run automatic Bluetooth setup before launching node"/>
+  <arg name="bluetooth_device" default="/dev/rfcomm0" doc="Bluetooth device path"/>
+  <arg name="esp32_mac" default="24:6F:28:D1:36:72" doc="ESP32 MAC address"/>
+  <arg name="debug_output" default="true" doc="Enable debug output"/>
+  
+  <!-- Automatic Bluetooth Setup Node (optional) -->
+  <group if="$(arg auto_setup)">
+    <node name="bluetooth_setup" pkg="exoskeleton_control" type="setup_bluetooth_crutch.sh" 
+          output="screen" launch-prefix="bash -c 'sleep 1; exec'" />
+    
+    <!-- Small delay to ensure setup completes before starting main node -->
+    <param name="/bluetooth_setup_delay" value="3.0"/>
+  </group>
+
+  <!-- Load configuration for the bluetooth crutch node -->
+  <rosparam file="$(find exoskeleton_control)/config/bluetooth_crutch_config.yaml" command="load" ns="bluetooth_crutch_node"/>
+
+  <!-- Override parameters with launch arguments -->
+  <param name="/bluetooth_crutch_node/bluetooth_device" value="$(arg bluetooth_device)"/>
+  <param name="/bluetooth_crutch_node/debug_output" value="$(arg debug_output)"/>
+
+  <!-- Bluetooth Crutch Node -->
+  <node name="bluetooth_crutch_node" pkg="exoskeleton_control" type="bluetooth_crutch_node.py" 
+        output="screen" launch-prefix="bash -c 'sleep 5; exec'">
+    
+    <!-- Topic remapping -->
+    <remap from="/crutch/state" to="/crutch/state"/>
+    <remap from="/crutch/sensor_data" to="/crutch/sensor_data"/>
+    
+  </node>
+
+  <!-- Optional: Node to monitor Bluetooth connection health -->
+  <node name="bluetooth_monitor" pkg="exoskeleton_control" type="bluetooth_crutch_node.py" 
+        output="log" if="false">
+    <!-- This could be extended to restart connections automatically -->
+  </node>
+
+</launch>

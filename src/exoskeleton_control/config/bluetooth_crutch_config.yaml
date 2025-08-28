@@ -1,0 +1,20 @@
+# Bluetooth Smart Crutch Configuration
+
+# Bluetooth device path (usually /dev/rfcomm0 after running rfcomm connect)
+bluetooth_device: "/dev/rfcomm0"
+
+# Serial communication settings
+baud_rate: 921600  # High speed as configured in ESP32
+
+# Connection management
+reconnect_interval: 5.0  # seconds between reconnection attempts
+
+# Data publishing rate (should match ESP32 print rate)
+publish_rate: 20  # Hz
+
+# Debug output control
+debug_output: true
+
+# Topic names (can be remapped in launch files)
+crutch_state_topic: "/crutch/state"
+crutch_sensor_topic: "/crutch/sensor_data"

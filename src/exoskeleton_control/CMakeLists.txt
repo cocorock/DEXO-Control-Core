@@ -14,6 +14,8 @@ add_message_files(
   FSMState.msg
   Trigger.msg
   CrutchCommand.msg
+  CrutchState.msg
+  CrutchSensorData.msg
   GaitParams.msg
   JointsTrajectory.msg
   ExoskeletonState.msg
@@ -41,5 +43,6 @@ install(PROGRAMS
   scripts/motor_control_node.py
   scripts/emergency_stop_node.py
   scripts/dummy_crutches.py
+  scripts/bluetooth_crutch_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

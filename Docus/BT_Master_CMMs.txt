@@ -1,0 +1,9 @@
+sudo systemctl start bluetooth
+sudo hciconfig hci0 up
+bluetoothctl
+sudo systemctl restart bluetooth
+sudo rfcomm connect 0 24:6F:28:D1:36:72 1
+
+
+sudo stty -F /dev/rfcomm0 115200 -echo -echoe -echok
+sudo cat /dev/rfcomm0
