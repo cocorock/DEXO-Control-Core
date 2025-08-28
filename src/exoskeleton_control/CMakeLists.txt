@@ -41,7 +41,7 @@ install(PROGRAMS
   scripts/gait_planner_node.py
   scripts/trajectory_generator_node.py
   scripts/motor_control_node.py
-  scripts/emergency_stop_node.py
+  scripts/orchestrator_node.py
   scripts/dummy_crutches.py
   scripts/bluetooth_crutch_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

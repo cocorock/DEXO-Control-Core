@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- Emergency Stop Node Launch File -->
+  <!-- Orchestrator Node Launch File -->
   
-  <!-- Load emergency stop configuration parameters -->
-  <rosparam file="$(find exoskeleton_control)/config/emergency_stop_config.yaml" command="load" ns="emergency_stop_node"/>
+  <!-- Load orchestrator configuration parameters -->
+  <rosparam file="$(find exoskeleton_control)/config/orchestrator_config.yaml" command="load" ns="orchestrator_node"/>
   
-  <!-- Emergency Stop Node -->
-  <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
+  <!-- Orchestrator Node -->
+  <node name="orchestrator_node" pkg="exoskeleton_control" type="orchestrator_node.py" output="screen">
     
     <!-- Override specific parameters if needed -->
     <param name="monitor_frequency" value="10.0"/>

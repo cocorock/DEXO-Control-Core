@@ -55,10 +55,10 @@ This document outlines the ROS system for controlling a lower-limb exoskeleton, 
 
 ---
 
-### 4. Emergency Stop Node
+### 4. Orchestrator Node
 
-*   **Node Name:** `emergency_stop_node`
-*   **Script:** `emergency_stop_node.py`
+*   **Node Name:** `orchestrator_node`
+*   **Script:** `orchestrator_node.py`
 *   **Frequency:** 100 Hz
 *   **Function:** This node acts as the master state machine for the entire system. It monitors the state of the exoskeleton and crutches to ensure safe operation. It is responsible for triggering emergency stops and managing the overall state transitions of the system (e.g., from `IDLE` to `WALKING`).
 

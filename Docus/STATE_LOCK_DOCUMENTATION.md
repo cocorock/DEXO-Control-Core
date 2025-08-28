@@ -169,7 +169,7 @@ with self.state_lock:
 
 ### Current State Lock Usage:
 ```python
-# File: emergency_stop_node.py
+# File: orchestrator_node.py
 self.state_lock = threading.Lock()
 
 # Safe pattern for emergency shutdown:

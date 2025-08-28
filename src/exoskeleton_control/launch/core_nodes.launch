@@ -11,7 +11,7 @@
 
   <!-- Load configurations for each node -->
   <rosparam file="$(find exoskeleton_control)/config/motor_control_config.yaml" command="load" ns="motor_control_node"/>
-  <rosparam file="$(find exoskeleton_control)/config/emergency_stop_config.yaml" command="load" ns="emergency_stop_node"/>
+  <rosparam file="$(find exoskeleton_control)/config/orchestrator_config.yaml" command="load" ns="orchestrator_node"/>
   <rosparam file="$(find exoskeleton_control)/config/trajectory_generator_config.yaml" command="load" ns="trajectory_generator_node"/>
 
   <!-- Motor Control Node -->
@@ -27,7 +27,7 @@
   </node>
 
   <!-- Emergency Stop Node -->
-  <node name="emergency_stop_node" pkg="exoskeleton_control" type="emergency_stop_node.py" output="screen">
+  <node name="orchestrator_node" pkg="exoskeleton_control" type="orchestrator_node.py" output="screen">
     <remap from="ExoskeletonState" to="/exoskeleton/state"/>
     <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
     <remap from="crutch_command" to="/exoskeleton/crutch_command"/>

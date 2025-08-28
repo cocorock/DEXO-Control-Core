@@ -79,7 +79,7 @@ This is a ROS1-based control system for a lower limb exoskeleton with the follow
 - Publishes: ExoskeletonState, MotorStatus, Torques
 - Subscribes: joints_trajectory, e_stop_trigger, calibration_trigger
 
-**Emergency Stop Node** (`emergency_stop_node.py`)
+**Orchestrator Node** (`orchestrator_node.py`)
 - Safety monitoring and state machine management
 - Monitors motor health and system state
 - Publishes: e_stop_trigger with current system state
