@@ -5,11 +5,14 @@
 
 set -e  # Exit on any error
 
-# Configuration
-ESP32_MAC_ADDRESS="24:6F:28:D1:36:72"
+# Configuration - Dual Crutch Support
+ESP32_RIGHT_MAC="24:6F:28:D1:36:72"    # Right crutch (priority device)
+ESP32_LEFT_MAC="24:6f:28:45:d3:76"     # Left crutch
 RFCOMM_CHANNEL="1"
-RFCOMM_DEVICE="/dev/rfcomm0"
-RFCOMM_ID="0"
+RFCOMM_RIGHT_DEVICE="/dev/rfcomm0"
+RFCOMM_LEFT_DEVICE="/dev/rfcomm1"
+RFCOMM_RIGHT_ID="0"
+RFCOMM_LEFT_ID="1"
 SCRIPT_NAME="$(basename "$0")"
 LOG_PREFIX="[BT-CRUTCH-SETUP]"
 
@@ -93,136 +96,259 @@ setup_bluetooth_interface() {
     fi
 }
 
-# Function to check if RFCOMM connection already exists
+# Function to check if RFCOMM connection already exists (dual crutch)
 check_existing_rfcomm() {
-    if [ -e "$RFCOMM_DEVICE" ]; then
-        log_info "RFCOMM device $RFCOMM_DEVICE already exists"
-        
-        # Check if it's actually connected and working
-        if [ -r "$RFCOMM_DEVICE" ] && [ -w "$RFCOMM_DEVICE" ]; then
-            log_success "Existing RFCOMM connection appears to be working"
-            return 0
+    local right_exists=false
+    local left_exists=false
+    
+    # Check right crutch
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        log_info "RFCOMM device $RFCOMM_RIGHT_DEVICE (right) already exists"
+        if [ -r "$RFCOMM_RIGHT_DEVICE" ] && [ -w "$RFCOMM_RIGHT_DEVICE" ]; then
+            log_success "Existing right crutch RFCOMM connection appears to be working"
+            right_exists=true
         else
-            log_warning "RFCOMM device exists but may not be functional, cleaning up..."
-            cleanup_rfcomm
-            return 1
+            log_warning "Right crutch RFCOMM device exists but may not be functional"
         fi
     fi
-    return 1
-}
-
-# Function to cleanup existing RFCOMM connections
-cleanup_rfcomm() {
-    log_info "Cleaning up existing RFCOMM connections..."
     
-    # Release any existing RFCOMM connections
-    if $SUDO_CMD rfcomm show | grep -q "^rfcomm${RFCOMM_ID}"; then
-        log_info "Releasing existing RFCOMM connection..."
-        $SUDO_CMD rfcomm release $RFCOMM_ID || true
-        sleep 1
-    fi
-    
-    # Remove device file if it exists
-    if [ -e "$RFCOMM_DEVICE" ]; then
-        log_info "Removing existing RFCOMM device file..."
-        $SUDO_CMD rm -f "$RFCOMM_DEVICE" || true
-    fi
-}
-
-# Function to establish RFCOMM connection
-establish_rfcomm_connection() {
-    log_info "Establishing RFCOMM connection to $ESP32_MAC_ADDRESS..."
-    
-    # First check if ESP32 is discoverable/paired
-    if ! hcitool scan | grep -q "$ESP32_MAC_ADDRESS"; then
-        log_warning "ESP32 device $ESP32_MAC_ADDRESS not found in scan"
-        log_info "Make sure the ESP32 is powered on and Bluetooth is enabled"
-    fi
-    
-    # Start RFCOMM connection in background
-    log_info "Connecting to ESP32 via RFCOMM..."
-    nohup $SUDO_CMD rfcomm connect $RFCOMM_ID $ESP32_MAC_ADDRESS $RFCOMM_CHANNEL >/dev/null 2>&1 &
-    RFCOMM_PID=$!
-    
-    # Wait for connection to establish
-    log_info "Waiting for RFCOMM connection to establish..."
-    for i in {1..10}; do
-        if [ -e "$RFCOMM_DEVICE" ]; then
-            log_success "RFCOMM connection established"
-            sleep 2  # Give it a moment to fully initialize
-            return 0
-        fi
-        log_info "Waiting... (${i}/10)"
-        sleep 1
-    done
-    
-    log_error "Failed to establish RFCOMM connection"
-    return 1
-}
-
-# Function to set proper permissions
-set_permissions() {
-    log_info "Setting permissions for $RFCOMM_DEVICE..."
-    
-    if [ -e "$RFCOMM_DEVICE" ]; then
-        $SUDO_CMD chmod 666 "$RFCOMM_DEVICE"
-        
-        # Verify permissions
-        if [ -r "$RFCOMM_DEVICE" ] && [ -w "$RFCOMM_DEVICE" ]; then
-            log_success "Permissions set successfully"
-            return 0
+    # Check left crutch
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        log_info "RFCOMM device $RFCOMM_LEFT_DEVICE (left) already exists"
+        if [ -r "$RFCOMM_LEFT_DEVICE" ] && [ -w "$RFCOMM_LEFT_DEVICE" ]; then
+            log_success "Existing left crutch RFCOMM connection appears to be working"
+            left_exists=true
         else
-            log_error "Failed to set proper permissions"
-            return 1
+            log_warning "Left crutch RFCOMM device exists but may not be functional"
         fi
-    else
-        log_error "RFCOMM device $RFCOMM_DEVICE does not exist"
-        return 1
-    fi
-}
-
-# Function to test the connection
-test_connection() {
-    log_info "Testing Bluetooth connection..."
-    
-    if [ ! -e "$RFCOMM_DEVICE" ]; then
-        log_error "RFCOMM device does not exist"
-        return 1
     fi
     
-    # Check if we can read from the device (with timeout)
-    log_info "Testing data reception..."
-    if timeout 5 cat "$RFCOMM_DEVICE" >/dev/null 2>&1; then
-        log_success "Connection test successful - data is being received"
+    # Return success only if both connections exist and work
+    if $right_exists && $left_exists; then
         return 0
     else
-        log_warning "No data received in 5 seconds - connection may not be fully ready"
-        log_info "This is normal if ESP32 is not sending data yet"
-        return 0  # Don't fail here, ESP32 might just be idle
+        # Clean up non-working connections
+        cleanup_rfcomm
+        return 1
     fi
 }
 
-# Function to display connection status
+# Function to cleanup existing RFCOMM connections (dual crutch)
+cleanup_rfcomm() {
+    log_info "Cleaning up existing RFCOMM connections (dual crutch)..."
+    
+    # Release right crutch connection
+    if $SUDO_CMD rfcomm show $RFCOMM_RIGHT_ID 2>/dev/null | grep -q "rfcomm$RFCOMM_RIGHT_ID"; then
+        log_info "Releasing existing right crutch RFCOMM connection..."
+        $SUDO_CMD rfcomm release $RFCOMM_RIGHT_ID || true
+        sleep 1
+    fi
+    
+    # Release left crutch connection  
+    if $SUDO_CMD rfcomm show $RFCOMM_LEFT_ID 2>/dev/null | grep -q "rfcomm$RFCOMM_LEFT_ID"; then
+        log_info "Releasing existing left crutch RFCOMM connection..."
+        $SUDO_CMD rfcomm release $RFCOMM_LEFT_ID || true
+        sleep 1
+    fi
+    
+    # Remove device files if they exist
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        log_info "Removing existing right crutch RFCOMM device file..."
+        $SUDO_CMD rm -f "$RFCOMM_RIGHT_DEVICE" || true
+    fi
+    
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        log_info "Removing existing left crutch RFCOMM device file..."
+        $SUDO_CMD rm -f "$RFCOMM_LEFT_DEVICE" || true
+    fi
+}
+
+# Function to establish RFCOMM connections (dual crutch)
+establish_rfcomm_connection() {
+    local right_success=false
+    local left_success=false
+    
+    log_info "Establishing dual RFCOMM connections..."
+    
+    # Check if ESP32 devices are discoverable/paired
+    log_info "Scanning for ESP32 devices..."
+    if ! hcitool scan | grep -q "$ESP32_RIGHT_MAC"; then
+        log_warning "Right crutch ESP32 device $ESP32_RIGHT_MAC not found in scan"
+        log_info "Make sure the right crutch ESP32 is powered on and Bluetooth is enabled"
+    fi
+    
+    if ! hcitool scan | grep -q "$ESP32_LEFT_MAC"; then
+        log_warning "Left crutch ESP32 device $ESP32_LEFT_MAC not found in scan"
+        log_info "Make sure the left crutch ESP32 is powered on and Bluetooth is enabled"
+    fi
+    
+    # Bind RFCOMM devices (this creates the device files without holding them open)
+    log_info "Binding right crutch ESP32 via RFCOMM..."
+    $SUDO_CMD rfcomm bind $RFCOMM_RIGHT_ID $ESP32_RIGHT_MAC $RFCOMM_CHANNEL
+    
+    log_info "Binding left crutch ESP32 via RFCOMM..."
+    $SUDO_CMD rfcomm bind $RFCOMM_LEFT_ID $ESP32_LEFT_MAC $RFCOMM_CHANNEL
+    
+    # Wait for device files to be created
+    log_info "Waiting for RFCOMM device files to be created..."
+    sleep 2  # Give time for device files to appear
+    
+    # Check if device files were created
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        log_success "Right crutch RFCOMM device created"
+        right_success=true
+    else
+        log_error "Right crutch RFCOMM device not created"
+    fi
+    
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        log_success "Left crutch RFCOMM device created"
+        left_success=true
+    else
+        log_error "Left crutch RFCOMM device not created"
+    fi
+    
+    # Report results
+    if $right_success && $left_success; then
+        log_success "Both RFCOMM devices established successfully"
+        return 0
+    elif $right_success && ! $left_success; then
+        log_warning "Only right crutch device established"
+        return 2  # Partial success
+    elif ! $right_success && $left_success; then
+        log_warning "Only left crutch device established"  
+        return 2  # Partial success
+    else
+        log_error "Failed to establish RFCOMM devices"
+        return 1  # Complete failure
+    fi
+}
+
+# Function to set proper permissions (dual crutch)
+set_permissions() {
+    log_info "Setting permissions for dual crutch devices..."
+    local right_success=false
+    local left_success=false
+    
+    # Set permissions for right crutch
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        $SUDO_CMD chmod 666 "$RFCOMM_RIGHT_DEVICE"
+        
+        if [ -r "$RFCOMM_RIGHT_DEVICE" ] && [ -w "$RFCOMM_RIGHT_DEVICE" ]; then
+            log_success "Right crutch permissions set successfully"
+            right_success=true
+        else
+            log_error "Failed to set proper permissions for right crutch"
+        fi
+    else
+        log_error "Right crutch RFCOMM device $RFCOMM_RIGHT_DEVICE does not exist"
+    fi
+    
+    # Set permissions for left crutch
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        $SUDO_CMD chmod 666 "$RFCOMM_LEFT_DEVICE"
+        
+        if [ -r "$RFCOMM_LEFT_DEVICE" ] && [ -w "$RFCOMM_LEFT_DEVICE" ]; then
+            log_success "Left crutch permissions set successfully"
+            left_success=true
+        else
+            log_error "Failed to set proper permissions for left crutch"
+        fi
+    else
+        log_error "Left crutch RFCOMM device $RFCOMM_LEFT_DEVICE does not exist"
+    fi
+    
+    # Return success if at least one device has proper permissions
+    if $right_success || $left_success; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to test the connections (dual crutch)
+test_connection() {
+    log_info "Testing dual Bluetooth connections..."
+    local right_tested=false
+    local left_tested=false
+    
+    # Test right crutch connection
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        log_info "Testing right crutch data reception..."
+        if timeout 3 cat "$RFCOMM_RIGHT_DEVICE" >/dev/null 2>&1; then
+            log_success "Right crutch connection test successful - data is being received"
+        else
+            log_warning "Right crutch: No data received in 3 seconds - connection may not be fully ready"
+        fi
+        right_tested=true
+    else
+        log_error "Right crutch RFCOMM device does not exist"
+    fi
+    
+    # Test left crutch connection
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        log_info "Testing left crutch data reception..."
+        if timeout 3 cat "$RFCOMM_LEFT_DEVICE" >/dev/null 2>&1; then
+            log_success "Left crutch connection test successful - data is being received"
+        else
+            log_warning "Left crutch: No data received in 3 seconds - connection may not be fully ready"
+        fi
+        left_tested=true
+    else
+        log_error "Left crutch RFCOMM device does not exist"
+    fi
+    
+    if $right_tested || $left_tested; then
+        log_info "This is normal if ESP32 devices are not sending data yet"
+        return 0  # Don't fail here, ESP32s might just be idle
+    else
+        return 1
+    fi
+}
+
+# Function to display connection status (dual crutch)
 show_status() {
-    log_info "=== Bluetooth Crutch Connection Status ==="
+    log_info "=== Dual Bluetooth Crutch Connection Status ==="
     
     echo "Bluetooth service: $(systemctl is-active bluetooth)"
     echo "HCI0 interface: $(hciconfig hci0 | grep -o 'UP RUNNING' || echo 'DOWN')"
+    echo ""
     
-    if [ -e "$RFCOMM_DEVICE" ]; then
-        echo "RFCOMM device: EXISTS ($(ls -la $RFCOMM_DEVICE))"
+    # Right crutch status
+    echo "=== RIGHT CRUTCH ($ESP32_RIGHT_MAC) ==="
+    if [ -e "$RFCOMM_RIGHT_DEVICE" ]; then
+        echo "RFCOMM device: EXISTS ($(ls -la $RFCOMM_RIGHT_DEVICE))"
     else
         echo "RFCOMM device: MISSING"
     fi
     
-    if $SUDO_CMD rfcomm show | grep -q "^rfcomm${RFCOMM_ID}"; then
+    if $SUDO_CMD rfcomm show $RFCOMM_RIGHT_ID 2>/dev/null | grep -q "rfcomm$RFCOMM_RIGHT_ID"; then
         echo "RFCOMM connection: ACTIVE"
-        $SUDO_CMD rfcomm show
     else
         echo "RFCOMM connection: INACTIVE"
     fi
+    echo ""
     
-    log_info "=============================================="
+    # Left crutch status
+    echo "=== LEFT CRUTCH ($ESP32_LEFT_MAC) ==="
+    if [ -e "$RFCOMM_LEFT_DEVICE" ]; then
+        echo "RFCOMM device: EXISTS ($(ls -la $RFCOMM_LEFT_DEVICE))"
+    else
+        echo "RFCOMM device: MISSING"
+    fi
+    
+    if $SUDO_CMD rfcomm show $RFCOMM_LEFT_ID 2>/dev/null | grep -q "rfcomm$RFCOMM_LEFT_ID"; then
+        echo "RFCOMM connection: ACTIVE"
+    else
+        echo "RFCOMM connection: INACTIVE"
+    fi
+    echo ""
+    
+    # Show all RFCOMM connections
+    echo "=== ALL RFCOMM CONNECTIONS ==="
+    $SUDO_CMD rfcomm 2>/dev/null || echo "No active RFCOMM connections"
+    
+    log_info "================================================"
 }
 
 # Function to cleanup on script exit
@@ -303,9 +429,12 @@ main() {
     # Step 8: Show final status
     show_status
     
-    log_success "Bluetooth Smart Crutch setup completed successfully!"
+    log_success "Dual Bluetooth Smart Crutch setup completed successfully!"
     log_info "You can now launch the ROS node with:"
     log_info "  roslaunch exoskeleton_control bluetooth_crutch.launch"
+    log_info "Devices configured:"
+    log_info "  Right crutch: $ESP32_RIGHT_MAC -> $RFCOMM_RIGHT_DEVICE"
+    log_info "  Left crutch:  $ESP32_LEFT_MAC -> $RFCOMM_LEFT_DEVICE"
     
     # Don't cleanup on successful exit
     trap - EXIT INT TERM

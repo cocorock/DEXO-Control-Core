@@ -18,7 +18,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-LOG_PREFIX="[BT-CRUTCH-LAUNCH]"
+LOG_PREFIX="[DUAL-BT-CRUTCH-LAUNCH]"
 
 # Logging functions
 log_info() {
@@ -100,18 +100,23 @@ launch_ros_node() {
 show_usage() {
     echo "Usage: $0 [options]"
     echo ""
+    echo "Dual Bluetooth Smart Crutch Launcher"
+    echo "Connects to both right and left crutches:"
+    echo "  Right crutch (priority): 24:6F:28:D1:36:72 -> /dev/rfcomm0"
+    echo "  Left crutch:             24:6f:28:45:d3:76 -> /dev/rfcomm1"
+    echo ""
     echo "Options:"
-    echo "  --setup-only, -s    Only run Bluetooth setup, don't launch ROS"
+    echo "  --setup-only, -s    Only run dual Bluetooth setup, don't launch ROS"
     echo "  --skip-setup        Skip Bluetooth setup, launch ROS directly"
-    echo "  --status            Show Bluetooth connection status"
-    echo "  --cleanup           Cleanup Bluetooth connections"
+    echo "  --status            Show dual Bluetooth connection status"
+    echo "  --cleanup           Cleanup dual Bluetooth connections"
     echo "  --help, -h          Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                  # Full automated launch (setup + ROS)"
-    echo "  $0 --setup-only     # Only setup Bluetooth"
-    echo "  $0 --status         # Check connection status"
-    echo "  $0 --cleanup        # Cleanup and exit"
+    echo "  $0                  # Full automated dual crutch launch (setup + ROS)"
+    echo "  $0 --setup-only     # Only setup dual Bluetooth connections"
+    echo "  $0 --status         # Check dual connection status"
+    echo "  $0 --cleanup        # Cleanup dual connections and exit"
 }
 
 # Function to handle cleanup on exit
@@ -126,7 +131,7 @@ trap cleanup_on_exit INT TERM
 
 # Main function
 main() {
-    log_info "=== Bluetooth Smart Crutch Launcher ==="
+    log_info "=== Dual Bluetooth Smart Crutch Launcher ==="
     
     # Parse command line arguments
     case "${1:-}" in
@@ -156,7 +161,7 @@ main() {
             ;;
         "")
             # Default: full automated launch
-            log_info "Running full automated launch"
+            log_info "Running full automated dual crutch launch"
             ;;
         *)
             log_error "Unknown option: $1"
@@ -165,8 +170,8 @@ main() {
             ;;
     esac
     
-    # Full automated launch sequence
-    log_info "Starting full automated launch sequence..."
+    # Full automated dual crutch launch sequence
+    log_info "Starting full automated dual crutch launch sequence..."
     
     # Step 1: Check ROS environment
     check_ros_environment
@@ -178,14 +183,16 @@ main() {
     if ! setup_bluetooth; then
         log_error "Failed to setup Bluetooth connection"
         log_info "You can try:"
-        log_info "  1. Check if ESP32 is powered on and Bluetooth enabled"
+        log_info "  1. Check if both ESP32s are powered on and Bluetooth enabled"
+        log_info "     Right crutch: 24:6F:28:D1:36:72"
+        log_info "     Left crutch:  24:6f:28:45:d3:76"
         log_info "  2. Run '$0 --status' to check current status"
         log_info "  3. Run '$0 --cleanup' to clean up and try again"
         exit 1
     fi
     
     # Step 4: Launch ROS node
-    log_success "All setup complete, launching ROS node..."
+    log_success "Dual crutch setup complete, launching ROS node..."
     launch_ros_node
 }
 

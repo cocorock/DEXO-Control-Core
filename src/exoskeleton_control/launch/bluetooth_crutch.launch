@@ -1,25 +1,32 @@
 <?xml version="1.0"?>
 <launch>
   <!-- 
-    Launch file for the Bluetooth Smart Crutch node.
+    Launch file for the Dual Bluetooth Smart Crutch node.
     
     Prerequisites:
-    1. Pair the ESP32 device with the system
-    2. Connect via RFCOMM: sudo rfcomm connect 0 24:6F:28:D1:36:72 1
-    3. Set permissions: sudo chmod 666 /dev/rfcomm0
+    1. Pair both ESP32 devices with the system
+    2. Connect via RFCOMM: 
+       Right crutch: sudo rfcomm connect 0 24:6F:28:D1:36:72 1
+       Left crutch:  sudo rfcomm connect 1 24:6f:28:45:d3:76 1
+    3. Set permissions: 
+       sudo chmod 666 /dev/rfcomm0
+       sudo chmod 666 /dev/rfcomm1
     
-    The ESP32 should be running MultisensorESP32_PT-CRUTCH_HMI-SYSTEM_V2.ino
+    Both ESP32s should be running MultisensorESP32_PT-CRUTCH_HMI-SYSTEM_V2.ino
     with USE_COMPACT_FORMAT enabled.
+    
+    Right crutch has priority for state commands.
   -->
 
-  <!-- Load configuration for the bluetooth crutch node -->
+  <!-- Load configuration for the dual bluetooth crutch node -->
   <rosparam file="$(find exoskeleton_control)/config/bluetooth_crutch_config.yaml" command="load" ns="bluetooth_crutch_node"/>
 
-  <!-- Bluetooth Crutch Node -->
+  <!-- Dual Bluetooth Crutch Node -->
   <node name="bluetooth_crutch_node" pkg="exoskeleton_control" type="bluetooth_crutch_node.py" output="screen">
     
-    <!-- Node parameters can be overridden here -->
-    <!-- <param name="bluetooth_device" value="/dev/rfcomm0"/> -->
+    <!-- Node parameters can be overridden here - Dual Crutch Support -->
+    <!-- <param name="bluetooth_right_device" value="/dev/rfcomm0"/> -->
+    <!-- <param name="bluetooth_left_device" value="/dev/rfcomm1"/> -->
     <!-- <param name="debug_output" value="true"/> -->
     
     <!-- Topic remapping -->
