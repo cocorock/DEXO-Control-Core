@@ -1,10 +1,14 @@
-# Bluetooth Smart Crutch Configuration
+# Bluetooth Smart Crutch Configuration - Dual Crutch Support
 
-# Bluetooth device path (usually /dev/rfcomm0 after running rfcomm connect)
-bluetooth_device: "/dev/rfcomm0"
+# Bluetooth device paths for dual crutch system
+bluetooth_right_device: "/dev/rfcomm0"  # Right crutch (priority device)
+bluetooth_left_device: "/dev/rfcomm1"   # Left crutch
+
+# Legacy single device parameter (deprecated - use dual device parameters above)
+# bluetooth_device: "/dev/rfcomm0"
 
 # Serial communication settings
-baud_rate: 921600  # High speed as configured in ESP32
+baud_rate: 115200  #921600  # High speed as configured in ESP32
 
 # Connection management
 reconnect_interval: 5.0  # seconds between reconnection attempts
@@ -14,6 +18,10 @@ publish_rate: 20  # Hz
 
 # Debug output control
 debug_output: true
+
+# Left crutch failure handling
+max_left_connection_attempts: 10    # Max attempts before disabling left crutch
+left_connection_retry_delay: 30.0   # Seconds to wait before re-enabling left crutch
 
 # Topic names (can be remapped in launch files)
 crutch_state_topic: "/crutch/state"
