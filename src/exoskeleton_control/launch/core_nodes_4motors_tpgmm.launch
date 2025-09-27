@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 
+    Launch file for the core exoskeleton control nodes with 4 motors and TPGMM trajectory generation.
+    This includes:
+    - Motor Control (4 motors: right hip 0x6, right knee 0x8, left hip 0x7, left knee 0x9)
+    - Emergency Stop
+    - TPGMM Trajectory Generator (replaces gmr_trajectory_generator_node.py)
+    - Dual ankle trajectory generation with inverse kinematics
+  -->
+
+  <!-- Load configurations for each node -->
+  <rosparam file="$(find exoskeleton_control)/config/motor_control_4motors_config.yaml" command="load" ns="motor_control_node_4motors"/>
+  <rosparam file="$(find exoskeleton_control)/config/orchestrator_config.yaml" command="load" ns="orchestrator_node"/>
+  <rosparam file="$(find exoskeleton_control)/config/tpgmm_trajectory_generator_config.yaml" command="load" ns="tpgmm_trajectory_generator_node"/>
+
+  <!-- Motor Control Node (4 motors) -->
+  <node name="motor_control_node_4motors" pkg="exoskeleton_control" type="motor_control_node_4motors.py" output="screen">
+    
+    <!-- Topic remapping -->
+    <remap from="dual_ankle_trajectory" to="/exoskeleton/dual_ankle_trajectory"/>
+    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
+    <remap from="Torques" to="/exoskeleton/torques"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="fsm_state" to="/exoskeleton/fsm_state"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
+    <remap from="calibration_failed" to="/exoskeleton/calibration_failed"/>
+    <remap from="calibration_complete" to="/exoskeleton/calibration_complete"/>
+  </node>
+
+  <!-- Emergency Stop Node -->
+  <node name="orchestrator_node" pkg="exoskeleton_control" type="orchestrator_node.py" output="screen">
+    <remap from="ExoskeletonState" to="/exoskeleton/state"/>
+    <remap from="Motor_Status" to="/exoskeleton/motor_status"/>
+    <remap from="crutch_command" to="/crutch_command"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="fsm_state" to="/exoskeleton/fsm_state"/>
+    <remap from="calibration_trigger_fw" to="/exoskeleton/calibration_trigger_fw"/>
+    <remap from="calibration_failed" to="/exoskeleton/calibration_failed"/>
+    <remap from="calibration_complete" to="/exoskeleton/calibration_complete"/>
+    <remap from="walking_trigger" to="/exoskeleton/walking_trigger"/>
+    <remap from="stopping_trigger" to="/exoskeleton/stopping_trigger"/>
+    <remap from="system_state" to="/exoskeleton/system_state"/>
+  </node>
+
+  <!-- TPGMM Trajectory Generator Node (replaces gmr_trajectory_generator_node.py) -->
+  <node name="tpgmm_trajectory_generator_node" pkg="exoskeleton_control" type="tpgmm_trajectory_generator_node.py" output="screen">
+    <!-- TPGMM Model file parameter -->
+    <param name="model_file" value="$(find exoskeleton_control)/pkls/gait_tpgmm_model_final.pkl"/>
+    
+    <!-- Trajectory parameters -->
+    <param name="trajectory_scale" value="1.0"/>
+    <param name="loop_trajectory" value="true"/>
+    <param name="frame_idx" value="0"/>
+    
+    <!-- Leg parameters for inverse kinematics -->
+    <param name="leg_parameters/L1" value="0.425"/>
+    <param name="leg_parameters/L2" value="0.45"/>
+    
+    <!-- Joint limits -->
+    <param name="joint_limits/hip_min_deg" value="-10"/>
+    <param name="joint_limits/hip_max_deg" value="50"/>
+    <param name="joint_limits/knee_min_deg" value="-60"/>
+    <param name="joint_limits/knee_max_deg" value="0"/>
+    
+    <!-- Topic remapping -->
+    <remap from="gait_params" to="/exoskeleton/gait_params"/>
+    <remap from="e_stop_trigger" to="/exoskeleton/emergency_stop"/>
+    <remap from="fsm_state" to="/exoskeleton/fsm_state"/>
+    <remap from="joints_trajectory" to="/exoskeleton/joints_trajectory"/>
+    <remap from="dual_ankle_trajectory" to="/exoskeleton/dual_ankle_trajectory"/>
+    <remap from="cycle_finished" to="/exoskeleton/cycle_finished"/>
+  </node>
+
+</launch>

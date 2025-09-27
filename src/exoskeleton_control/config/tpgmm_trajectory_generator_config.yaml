@@ -1,0 +1,111 @@
+# TPGMM Trajectory Generator Node Configuration
+# Configuration for TPGMM-based trajectory generation with dual ankle control
+
+# Control Parameters
+control_frequency: 100  # Hz - Trajectory publishing rate
+
+# Leg Physical Parameters (2-link planar arm model)
+leg_parameters:
+  L1: 0.425  # Thigh length (m) - first link
+  L2: 0.45   # Shin length (m) - second link
+
+# Joint Limits (degrees) - converted to radians internally
+joint_limits:
+  hip_min_deg: -10     # Hip joint minimum angle
+  hip_max_deg: 50      # Hip joint maximum angle  
+  knee_min_deg: -60    # Knee joint minimum angle
+  knee_max_deg: 0      # Knee joint maximum angle
+
+# TPGMM Model Configuration
+model_file: "src/exoskeleton_control/pkls/gait_tpgmm_model_final.pkl"  # TPGMM model file path
+gait_analysis_file: "src/exoskeleton_control/data/4D/gait_analysis_export_subject35.json"  # Gait analysis data file path
+
+# Gait Timing Parameters (loaded from gait analysis file)
+gait_timing:
+  use_gait_analysis_timing: true   # Use timing from gait analysis file
+  fallback_duration: 1.0          # Fallback duration if gait analysis unavailable (seconds)
+  interpolation_method: "linear"   # Interpolation method for trajectory timing
+
+# TPGMM Parameters
+tpgmm_settings:
+  frame_idx: 0              # Frame index to use for TPGMM (default: first frame)
+  trajectory_scale: 1.0     # Scale factor for trajectory positions (1.0 = no scaling)
+  loop_trajectory: true     # Whether to loop the trajectory continuously
+
+# Trajectory Processing Parameters
+trajectory_processing:
+  time_normalization: true   # Normalize time input to [0, 1] range
+  prediction_smoothing: 0.1  # Low-pass filter coefficient for acceleration estimation
+  
+# Dual Ankle Trajectory Configuration
+dual_ankle_settings:
+  feature_mapping:
+    # Expected feature order in TPGMM model (excluding time at index 0):
+    # [1: right_ankle_pos_x, 2: right_ankle_pos_y, 3: right_ankle_vel_x, 4: right_ankle_vel_y,
+    #  5: left_ankle_pos_x, 6: left_ankle_pos_y, 7: left_ankle_vel_x, 8: left_ankle_vel_y]
+    time_index: 0
+    right_ankle_indices: [1, 2, 3, 4]  # [pos_x, pos_y, vel_x, vel_y]
+    left_ankle_indices: [5, 6, 7, 8]   # [pos_x, pos_y, vel_x, vel_y]
+  
+  coordinate_system:
+    origin: "hip_joint"       # Coordinate system origin
+    x_forward: true           # X-axis points forward
+    y_upward: true           # Y-axis points upward
+    z_rightward: true        # Z-axis points rightward (right-handed)
+
+# Inverse Kinematics Parameters
+ik_settings:
+  max_iterations: 100        # Maximum IK solver iterations
+  tolerance: 1e-6           # Convergence tolerance
+  elbow_down_config: true   # Use knee-down configuration for legs
+  singularity_threshold: 1e-6  # Threshold for detecting kinematic singularities
+  
+  # Error codes for IK failures
+  error_codes:
+    unreachable: -0.123     # Target unreachable error code
+    joint_limits: -0.321   # Joint limits exceeded error code
+
+# Jacobian-based Velocity Calculation
+jacobian_settings:
+  use_jacobian: true        # Use Jacobian method for joint velocities
+  singularity_avoidance: true  # Avoid singular configurations
+  damping_factor: 0.01      # Damping factor for pseudo-inverse
+
+# Safety Parameters
+safety:
+  max_joint_velocity: 5.0   # rad/s - Maximum allowed joint velocity
+  max_ankle_velocity: 2.0   # m/s - Maximum allowed ankle velocity
+  position_tolerance: 0.1   # m - Position tolerance for reachability check
+  workspace_limits:         # Ankle workspace limits relative to hip
+    x_min: -0.8             # Forward reach limit (m)
+    x_max: 0.8              # Backward reach limit (m)
+    y_min: -0.8             # Downward reach limit (m)
+    y_max: 0.2              # Upward reach limit (m)
+
+# State-based Output Configuration
+output_values:
+  ready_state:
+    ankle_position: [0.0, -0.7]      # Safe ankle position [x, y] relative to hip
+    ankle_velocity: [0.0, 0.0]       # Zero velocity in ready state
+  
+  walking_state: "tpgmm_prediction"  # Use TPGMM predictions
+  
+  stopping_state:
+    ankle_position: [0.0, -0.7]      # Safe stopping ankle position
+    ankle_velocity: [0.0, 0.0]       # Zero velocity in stopping state
+
+# Logging and Debug
+logging:
+  level: "INFO"                     # DEBUG, INFO, WARN, ERROR
+  log_trajectory_stats: true        # Log trajectory statistics on load
+  log_ik_failures: true            # Log inverse kinematics failures
+  log_joint_limits: true           # Log joint limit violations
+  log_tpgmm_predictions: false     # Log TPGMM prediction details (can be verbose)
+  trajectory_progress_interval: 50  # Log progress every N trajectory points
+
+# Model Validation Settings
+model_validation:
+  required_fields: ['tpgmm', 'feature_names', 'n_components']
+  validate_on_load: true            # Validate model structure on loading
+  check_feature_count: true         # Verify expected number of features
+  expected_features: 9              # Expected total features (time + 8 ankle features)

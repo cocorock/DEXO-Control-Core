@@ -1,0 +1,91 @@
+# =====================================================================
+# DEXO Control Core - 4 Motor Configuration
+# Configuration for motor_control_node_4motors (bilateral exoskeleton)
+# =====================================================================
+
+# =====================================================================
+# MOTOR CONTROL CONFIGURATION
+# =====================================================================
+
+# Calibration Parameters
+calibration:
+  sequence: [1, 2, 3, 4]         # Calibration order: Right hip (1), Right knee (2), Left hip (3), Left knee (4)
+  speed_deg: 30.0                # Calibration speed in degrees/second (0.52 rad/s)
+  max_time: 30.0                 # Maximum calibration time in seconds
+  torque_thresholds: [2.0, 2.3, 2.0, 2.3]  # Torque thresholds [right_hip, right_knee, left_hip, left_knee] in Nm
+  
+  # Compensation torques for structural weight during calibration
+  # Format: [negative_limit_torque, positive_limit_torque] per motor (standard order)
+  # negative_limit_torque: torque applied when moving to negative limit (typically negative value)
+  # positive_limit_torque: torque applied when moving to positive limit (typically positive value)
+  compensation_torques:
+    right_hip:  [6.0, 12.0]      # [-Nm, +Nm] for negative/positive limit directions
+    right_knee: [7.0, 0.0]       # [-Nm, +Nm] for negative/positive limit directions
+    left_hip:   [6.0, 12.0]      # [-Nm, +Nm] for negative/positive limit directions
+    left_knee:  [7.0, 0.0]       # [-Nm, +Nm] for negative/positive limit directions
+
+# Motor Hardware Configuration
+motors:
+  ids: [0x06, 0x08, 0x07, 0x09]  # CAN IDs: [Right hip, Right knee, Left hip, Left knee]
+  joint_names: ['right_hip', 'right_knee', 'left_hip', 'left_knee']
+  models: ['AK80_64', 'AK80_8', 'AK80_64', 'AK80_8']  # Motor models
+  directions: [-1, 1, -1, 1]     # Direction multipliers
+  
+  # Joint angle limits in degrees [min, max]
+  angle_limits_deg:
+    - [-31, 84]   # Right hip: for negative/positive limit directions
+    - [-92, 0]    # Right knee: for negative/positive limit directions
+    - [-31, 84]   # Left hip: for negative/positive limit directions
+    - [-92, 0]    # Left knee: for negative/positive limit directions
+
+# Control Gains per Motor
+control_gains:
+  right_hip:
+    calibration: {kp: 5.0, kd: 3.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 9.0, kd: 1.50}
+  
+  right_knee:
+    calibration: {kp: 5.0, kd: 5.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 5.0, kd: 2.0}
+  
+  left_hip:
+    calibration: {kp: 5.0, kd: 3.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 9.0, kd: 1.50}
+  
+  left_knee:
+    calibration: {kp: 5.0, kd: 5.0}
+    hold:        {kp: 2.0, kd: 1.5}
+    trajectory:  {kp: 5.0, kd: 2.0}
+
+# CAN Interface Configuration
+can_bustype: 'socketcan'
+can_channel: 'can0'
+can_bitrate: 1000000
+
+# =====================================================================
+# TRAJECTORY GENERATOR COMPATIBILITY
+# =====================================================================
+
+trajectory_generator:
+  # Timing Configuration
+  control_frequency: 200         # Hz, synchronized with motor control
+  
+  # Leg Kinematics (meters)
+  leg_parameters:
+    L1: 0.425                    # Thigh length (hip to knee)
+    L2: 0.45                     # Shin length (knee to ankle)
+  
+  # Joint limits are defined in motors.angle_limits_deg section above
+  
+  # Trajectory Data Configuration
+  loop_trajectory: true          # Loop trajectory continuously
+  trajectory_scale: 1.0          # Scaling factor for trajectory positions
+  
+  # State-based Output Values for 4 motors
+  output_values:
+    ready_state:   [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # [R_hip_pos, R_knee_pos, L_hip_pos, L_knee_pos, R_hip_vel, R_knee_vel, L_hip_vel, L_knee_vel]
+    walking_state: "trajectory_data"                            # Use actual trajectory data
+    stopping_state: [1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0] # Safe stopping position

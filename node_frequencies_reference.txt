@@ -1,0 +1,78 @@
+================================================================================
+DEXO Control Core - Node Frequencies Reference
+Launch File: core_nodes_4motors_tpgmm.launch
+================================================================================
+
+NODE FREQUENCIES AND CODE LOCATIONS:
+
+1. MOTOR CONTROL NODE (4 MOTORS) - 200 Hz
+================================================================================
+File: motor_control_node_4motors.py
+- Line 186: self.control_frequency = 200.0  # Hz (hardcoded)
+- Line 264: self.rate = rospy.Rate(self.control_frequency) (creates ROS rate)
+
+How to Change:
+- Edit Line 186 in motor_control_node_4motors.py
+- Change: self.control_frequency = 200.0  # to desired frequency
+
+2. TPGMM TRAJECTORY GENERATOR - 100 Hz
+================================================================================
+File: tpgmm_trajectory_generator_node.py
+- Line 62: self.control_frequency = rospy.get_param('~control_frequency', 100) (from config, default 100)
+- Line 96: self.control_frequency = 100 (fallback default)
+- Line 50: self.rate = rospy.Rate(self.control_frequency) (creates ROS rate)
+
+How to Change:
+Option 1 (Recommended): Edit config/tpgmm_trajectory_generator_config.yaml
+- Change: control_frequency: 100  # to desired value
+
+Option 2: Edit Line 96 in tpgmm_trajectory_generator_node.py
+- Change: self.control_frequency = 100  # to desired frequency
+
+3. ORCHESTRATOR NODE (EMERGENCY STOP) - 50 Hz
+================================================================================
+File: orchestrator_node.py
+- Line 501: rate = rospy.Rate(50)  # 50 Hz (hardcoded in multiple functions)
+- Line 534: rate = rospy.Rate(50)  # 50 Hz
+- Line 582: rate = rospy.Rate(50)  # 50 Hz
+- Line 610: rate = rospy.Rate(50)  # 50 Hz
+- Line 639: rate = rospy.Rate(50)  # 50 Hz
+
+How to Change:
+- Edit all instances of "rate = rospy.Rate(50)" in orchestrator_node.py
+- Replace 50 with desired frequency in all locations
+
+================================================================================
+RUNTIME MONITORING COMMANDS:
+================================================================================
+
+Check actual publish rates (when nodes are running):
+- rostopic hz /exoskeleton/state                    # Motor control rate
+- rostopic hz /exoskeleton/dual_ankle_trajectory     # TPGMM rate  
+- rostopic hz /exoskeleton/fsm_state                # Orchestrator rate
+
+Check frequencies in configuration files:
+- grep -n "control_frequency" config/motor_control_4motors_config.yaml
+- grep -n "control_frequency" config/tpgmm_trajectory_generator_config.yaml
+- grep -n "frequency\|rate" config/orchestrator_config.yaml
+
+Check frequencies in source code:
+- grep -n "control_frequency\|Rate" scripts/motor_control_node_4motors.py
+- grep -n "control_frequency\|Rate" scripts/tpgmm_trajectory_generator_node.py
+- grep -n "Rate\|frequency" scripts/orchestrator_node.py
+
+================================================================================
+SUMMARY:
+================================================================================
+- Motor Control: 200 Hz (hardcoded) - Real-time motor commands
+- TPGMM Generator: 100 Hz (configurable) - Trajectory generation
+- Orchestrator: 50 Hz (hardcoded) - State management
+
+Notes:
+- Motor control runs fastest for real-time control requirements
+- TPGMM frequency can be adjusted via configuration file
+- Orchestrator frequency is hardcoded in multiple locations
+- All frequencies use rospy.Rate() for timing control
+
+Generated: September 26, 2024
+================================================================================
