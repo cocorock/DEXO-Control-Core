@@ -10,8 +10,10 @@ import json
 from scipy import interpolate
 from exoskeleton_control.msg import GaitParams, JointsTrajectory, DualAnkleTrajectory, EStopTrigger, Trigger, FSMState
 
-# Add TaskParameterizedGaussianMixtureModels to Python path
-sys.path.append('TaskParameterizedGaussianMixtureModels')
+# Add TPGMM library to Python path
+workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if workspace_root not in sys.path:
+    sys.path.insert(0, workspace_root)
 
 class TPGMMTrajectoryGeneratorNode:
     def __init__(self):
@@ -274,8 +276,8 @@ class TPGMMTrajectoryGeneratorNode:
             Dictionary with ankle position and velocity data, or None if error
         """
         if self.tpgmm_model is None:
-            rospy.logwarn("tpgmm: No TPGMM model available for prediction")
-            return None
+            # Fallback to simulation mode when TPGMM model is not available
+            return self.simulate_ankle_trajectory(time_input, feature_idx_to_predict)
 
         try:
             # Normalize input time to [0, 1] range
@@ -700,19 +702,38 @@ class TPGMMTrajectoryGeneratorNode:
         trajectory_msg = JointsTrajectory()
         trajectory_msg.header.stamp = rospy.Time.now()
         
-        # Default safe values
-        safe_pos = [0.0, 0.0]
+        # Calculate safe values from first trajectory point (time_phase=0)
+        safe_pos_right = [0.0, 0.0]
+        safe_pos_left = [0.0, 0.0]
         safe_vel = [0.0, 0.0]
+        
+        if self.tpgmm_model is not None:
+            # Get first dual ankle trajectory point (time_phase=0) for safe values
+            first_traj_point = self.get_interpolated_dual_ankle_trajectory_point(0.0)
+            if first_traj_point is not None:
+                # Calculate inverse kinematics for right ankle
+                right_ankle_x = first_traj_point['right_ankle_pos'][0]
+                right_ankle_y = first_traj_point['right_ankle_pos'][1]
+                right_hip, right_knee = self.calculate_inverse_kinematics(right_ankle_x, right_ankle_y)
+                if right_hip > -4.0 and right_knee > -4.0:  # Check if IK was successful
+                    safe_pos_right = [right_hip, right_knee]
+                
+                # Calculate inverse kinematics for left ankle
+                left_ankle_x = first_traj_point['left_ankle_pos'][0]
+                left_ankle_y = first_traj_point['left_ankle_pos'][1]
+                left_hip, left_knee = self.calculate_inverse_kinematics(left_ankle_x, left_ankle_y)
+                if left_hip > -4.0 and left_knee > -4.0:  # Check if IK was successful
+                    safe_pos_left = [left_hip, left_knee]
         
         # Set values based on system state
         if self.system_state == "READY":
             # READY state: publish safe position with zero velocities
-            trajectory_msg.Rhip_pos_ref = safe_pos[0]
-            trajectory_msg.Rknee_pos_ref = safe_pos[1]
+            trajectory_msg.Rhip_pos_ref = safe_pos_right[0]
+            trajectory_msg.Rknee_pos_ref = safe_pos_right[1]
             trajectory_msg.Rhip_vel_ref = 0.0
             trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref = safe_pos[0]
-            trajectory_msg.Lknee_pos_ref = safe_pos[1]
+            trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+            trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
             trajectory_msg.Lhip_vel_ref = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
             
@@ -735,11 +756,36 @@ class TPGMMTrajectoryGeneratorNode:
                     trajectory_msg.Rhip_vel_ref = vel[0]
                     trajectory_msg.Rknee_vel_ref = vel[1]
                     
-                    # Mirror for left leg (or use different model if available)
-                    trajectory_msg.Lhip_pos_ref = pos[0]
-                    trajectory_msg.Lknee_pos_ref = pos[1]
-                    trajectory_msg.Lhip_vel_ref = vel[0]
-                    trajectory_msg.Lknee_vel_ref = vel[1]
+                    # Generate left leg trajectory using dual ankle data
+                    dual_traj_point = self.get_interpolated_dual_ankle_trajectory_point(time_phase)
+                    if dual_traj_point is not None:
+                        # Calculate left leg IK from left ankle trajectory
+                        left_ankle_x = dual_traj_point['left_ankle_pos'][0]
+                        left_ankle_y = dual_traj_point['left_ankle_pos'][1]
+                        left_ankle_vx = dual_traj_point['left_ankle_vel'][0]
+                        left_ankle_vy = dual_traj_point['left_ankle_vel'][1]
+                        
+                        left_hip, left_knee = self.calculate_inverse_kinematics(left_ankle_x, left_ankle_y)
+                        if left_hip > -4.0 and left_knee > -4.0:  # Check if IK was successful
+                            left_vel_hip, left_vel_knee = self.calculate_joint_velocities(
+                                left_hip, left_knee, left_ankle_vx, left_ankle_vy
+                            )
+                            trajectory_msg.Lhip_pos_ref = left_hip
+                            trajectory_msg.Lknee_pos_ref = left_knee
+                            trajectory_msg.Lhip_vel_ref = left_vel_hip
+                            trajectory_msg.Lknee_vel_ref = left_vel_knee
+                        else:
+                            # Fallback to safe left position
+                            trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+                            trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
+                            trajectory_msg.Lhip_vel_ref = 0.0
+                            trajectory_msg.Lknee_vel_ref = 0.0
+                    else:
+                        # Fallback to safe left position
+                        trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+                        trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
+                        trajectory_msg.Lhip_vel_ref = 0.0
+                        trajectory_msg.Lknee_vel_ref = 0.0
                     
                     # Log progress occasionally
                     if int(self.current_time * self.control_frequency) % 50 == 0:
@@ -748,32 +794,32 @@ class TPGMMTrajectoryGeneratorNode:
                         rospy.loginfo(f"tpgmm: TPGMM trajectory t={time_phase:.2f}: hip={hip_deg:.1f}°, knee={knee_deg:.1f}°")
                 else:
                     # Fallback to safe values if TPGMM fails
-                    trajectory_msg.Rhip_pos_ref = safe_pos[0]
-                    trajectory_msg.Rknee_pos_ref = safe_pos[1]
+                    trajectory_msg.Rhip_pos_ref = safe_pos_right[0]
+                    trajectory_msg.Rknee_pos_ref = safe_pos_right[1]
                     trajectory_msg.Rhip_vel_ref = 0.0
                     trajectory_msg.Rknee_vel_ref = 0.0
-                    trajectory_msg.Lhip_pos_ref = safe_pos[0]
-                    trajectory_msg.Lknee_pos_ref = safe_pos[1]
+                    trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+                    trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
                     trajectory_msg.Lhip_vel_ref = 0.0
                     trajectory_msg.Lknee_vel_ref = 0.0
             else:
                 # No active trajectory - use safe values
-                trajectory_msg.Rhip_pos_ref = safe_pos[0]
-                trajectory_msg.Rknee_pos_ref = safe_pos[1]
+                trajectory_msg.Rhip_pos_ref = safe_pos_right[0]
+                trajectory_msg.Rknee_pos_ref = safe_pos_right[1]
                 trajectory_msg.Rhip_vel_ref = 0.0
                 trajectory_msg.Rknee_vel_ref = 0.0
-                trajectory_msg.Lhip_pos_ref = safe_pos[0]
-                trajectory_msg.Lknee_pos_ref = safe_pos[1]
+                trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+                trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
                 trajectory_msg.Lhip_vel_ref = 0.0
                 trajectory_msg.Lknee_vel_ref = 0.0
         else:
             # All other states: use safe values
-            trajectory_msg.Rhip_pos_ref = safe_pos[0]
-            trajectory_msg.Rknee_pos_ref = safe_pos[1]
+            trajectory_msg.Rhip_pos_ref = safe_pos_right[0]
+            trajectory_msg.Rknee_pos_ref = safe_pos_right[1]
             trajectory_msg.Rhip_vel_ref = 0.0
             trajectory_msg.Rknee_vel_ref = 0.0
-            trajectory_msg.Lhip_pos_ref = safe_pos[0]
-            trajectory_msg.Lknee_pos_ref = safe_pos[1]
+            trajectory_msg.Lhip_pos_ref = safe_pos_left[0]
+            trajectory_msg.Lknee_pos_ref = safe_pos_left[1]
             trajectory_msg.Lhip_vel_ref = 0.0
             trajectory_msg.Lknee_vel_ref = 0.0
         
@@ -792,19 +838,28 @@ class TPGMMTrajectoryGeneratorNode:
         trajectory_msg = DualAnkleTrajectory()
         trajectory_msg.header.stamp = rospy.Time.now()
         
-        # Default safe values (zero positions and velocities)
-        safe_pos = [0.0, 0.0]
+        # Calculate safe values from first trajectory point (time_phase=0)
+        safe_pos_right = [0.0, 0.0]
+        safe_pos_left = [0.0, 0.0]
         safe_vel = [0.0, 0.0]
+        
+        if self.tpgmm_model is not None:
+            # Get first dual ankle trajectory point (time_phase=0) for safe values
+            first_traj_point = self.get_interpolated_dual_ankle_trajectory_point(0.0)
+            if first_traj_point is not None:
+                safe_pos_right = [first_traj_point['right_ankle_pos'][0], first_traj_point['right_ankle_pos'][1]]
+                safe_pos_left = [first_traj_point['left_ankle_pos'][0], first_traj_point['left_ankle_pos'][1]]
+                # safe_vel = [first_traj_point['right_ankle_vel'][0], first_traj_point['right_ankle_vel'][1]]
         
         # Set values based on system state
         if self.system_state == "READY":
             # READY state: publish safe position with zero velocities
-            trajectory_msg.right_ankle_pos_x = safe_pos[0]
-            trajectory_msg.right_ankle_pos_y = safe_pos[1]
+            trajectory_msg.right_ankle_pos_x = safe_pos_right[0]
+            trajectory_msg.right_ankle_pos_y = safe_pos_right[1]
             trajectory_msg.right_ankle_vel_x = safe_vel[0]
             trajectory_msg.right_ankle_vel_y = safe_vel[1]
-            trajectory_msg.left_ankle_pos_x = safe_pos[0]
-            trajectory_msg.left_ankle_pos_y = safe_pos[1]
+            trajectory_msg.left_ankle_pos_x = safe_pos_left[0]
+            trajectory_msg.left_ankle_pos_y = safe_pos_left[1]
             trajectory_msg.left_ankle_vel_x = safe_vel[0]
             trajectory_msg.left_ankle_vel_y = safe_vel[1]
             trajectory_msg.time_phase = 0.0
@@ -842,34 +897,34 @@ class TPGMMTrajectoryGeneratorNode:
                                     f"L_ankle=({left_pos[0]:.3f}, {left_pos[1]:.3f})")
                 else:
                     # Fallback to safe values if TPGMM fails
-                    trajectory_msg.right_ankle_pos_x = safe_pos[0]
-                    trajectory_msg.right_ankle_pos_y = safe_pos[1]
+                    trajectory_msg.right_ankle_pos_x = safe_pos_right[0]
+                    trajectory_msg.right_ankle_pos_y = safe_pos_right[1]
                     trajectory_msg.right_ankle_vel_x = safe_vel[0]
                     trajectory_msg.right_ankle_vel_y = safe_vel[1]
-                    trajectory_msg.left_ankle_pos_x = safe_pos[0]
-                    trajectory_msg.left_ankle_pos_y = safe_pos[1]
+                    trajectory_msg.left_ankle_pos_x = safe_pos_left[0]
+                    trajectory_msg.left_ankle_pos_y = safe_pos_left[1]
                     trajectory_msg.left_ankle_vel_x = safe_vel[0]
                     trajectory_msg.left_ankle_vel_y = safe_vel[1]
                     trajectory_msg.time_phase = 0.0
             else:
                 # No active trajectory - use safe values
-                trajectory_msg.right_ankle_pos_x = safe_pos[0]
-                trajectory_msg.right_ankle_pos_y = safe_pos[1]
+                trajectory_msg.right_ankle_pos_x = safe_pos_right[0]
+                trajectory_msg.right_ankle_pos_y = safe_pos_right[1]
                 trajectory_msg.right_ankle_vel_x = safe_vel[0]
                 trajectory_msg.right_ankle_vel_y = safe_vel[1]
-                trajectory_msg.left_ankle_pos_x = safe_pos[0]
-                trajectory_msg.left_ankle_pos_y = safe_pos[1]
+                trajectory_msg.left_ankle_pos_x = safe_pos_left[0]
+                trajectory_msg.left_ankle_pos_y = safe_pos_left[1]
                 trajectory_msg.left_ankle_vel_x = safe_vel[0]
                 trajectory_msg.left_ankle_vel_y = safe_vel[1]
                 trajectory_msg.time_phase = 0.0
         else:
             # All other states: use safe values
-            trajectory_msg.right_ankle_pos_x = safe_pos[0]
-            trajectory_msg.right_ankle_pos_y = safe_pos[1]
+            trajectory_msg.right_ankle_pos_x = safe_pos_right[0]
+            trajectory_msg.right_ankle_pos_y = safe_pos_right[1]
             trajectory_msg.right_ankle_vel_x = safe_vel[0]
             trajectory_msg.right_ankle_vel_y = safe_vel[1]
-            trajectory_msg.left_ankle_pos_x = safe_pos[0]
-            trajectory_msg.left_ankle_pos_y = safe_pos[1]
+            trajectory_msg.left_ankle_pos_x = safe_pos_left[0]
+            trajectory_msg.left_ankle_pos_y = safe_pos_left[1]
             trajectory_msg.left_ankle_vel_x = safe_vel[0]
             trajectory_msg.left_ankle_vel_y = safe_vel[1]
             trajectory_msg.time_phase = 0.0

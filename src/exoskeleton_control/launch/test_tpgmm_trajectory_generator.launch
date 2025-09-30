@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- 
+    Test launch file for TPGMM Trajectory Generator Node
+    This launch file provides a standalone test environment for the TPGMM trajectory generator
+    without requiring the full exoskeleton hardware setup.
+  -->
+
+  <!-- Load TPGMM trajectory generator configuration -->
+  <rosparam file="$(find exoskeleton_control)/config/tpgmm_trajectory_generator_config.yaml" command="load" ns="tpgmm_trajectory_generator_node"/>
+
+  <!-- TPGMM Trajectory Generator Node -->
+  <node name="tpgmm_trajectory_generator_node" pkg="exoskeleton_control" type="tpgmm_trajectory_generator_node.py" output="screen">
+    
+    <!-- Model and data file parameters -->
+    <param name="model_file" value="$(find exoskeleton_control)/pkls/gait_tpgmm_model_final.pkl"/>
+    <param name="gait_analysis_file" value="$(find exoskeleton_control)/data/4D/gait_analysis_export_subject35.json"/>
+    
+    <!-- Control parameters -->
+    <param name="control_frequency" value="100"/>
+    
+    <!-- Leg parameters -->
+    <param name="leg_parameters/L1" value="0.425"/>
+    <param name="leg_parameters/L2" value="0.45"/>
+    
+    <!-- Joint limits -->
+    <param name="joint_limits/hip_min_deg" value="-10"/>
+    <param name="joint_limits/hip_max_deg" value="50"/>
+    <param name="joint_limits/knee_min_deg" value="-60"/>
+    <param name="joint_limits/knee_max_deg" value="0"/>
+    
+    <!-- TPGMM parameters -->
+    <param name="frame_idx" value="0"/>
+    <param name="trajectory_scale" value="1.0"/>
+    <param name="loop_trajectory" value="true"/>
+    
+    <!-- Gait timing configuration -->
+    <param name="gait_timing/use_gait_analysis_timing" value="true"/>
+    <param name="gait_timing/fallback_duration" value="1.0"/>
+    <param name="gait_timing/interpolation_method" value="linear"/>
+    
+    <!-- Topic remapping for testing -->
+    <remap from="gait_params" to="/test/gait_params"/>
+    <remap from="e_stop_trigger" to="/test/e_stop_trigger"/>
+    <remap from="fsm_state" to="/test/fsm_state"/>
+    <remap from="joints_trajectory" to="/test/joints_trajectory"/>
+    <remap from="dual_ankle_trajectory" to="/test/dual_ankle_trajectory"/>
+    <remap from="cycle_finished" to="/test/cycle_finished"/>
+  </node>
+
+  <!-- Arguments for optional components (must be declared before use) -->
+  <arg name="publish_test_states" default="true" doc="Enable automatic FSM state transitions for testing"/>
+  <arg name="enable_plots" default="false" doc="Enable RQT plotting windows"/>
+  <arg name="enable_rviz" default="false" doc="Enable RViz visualization"/>
+  <arg name="enable_monitor" default="true" doc="Enable trajectory monitoring and statistics"/>
+
+  <!-- Test FSM State Publisher - simulates system state changes -->
+  <node name="test_fsm_publisher" pkg="exoskeleton_control" type="test_fsm_publisher.py" output="screen" if="$(arg publish_test_states)">
+    <param name="state_sequence" value="['INIT', 'READY', 'WALKING', 'STOPPING', 'READY']"/>
+    <param name="state_duration" value="5.0"/>  <!-- seconds per state -->
+    <remap from="fsm_state" to="/test/fsm_state"/>
+  </node>
+
+  <!-- RQT Plot for visualization (optional) -->
+  <node name="rqt_plot_trajectories" pkg="rqt_plot" type="rqt_plot" args="/test/joints_trajectory/Rhip_pos_ref /test/joints_trajectory/Rknee_pos_ref /test/dual_ankle_trajectory/right_ankle_pos_x /test/dual_ankle_trajectory/right_ankle_pos_y" if="$(arg enable_plots)"/>
+
+  <!-- RViz for 3D visualization (optional) -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find exoskeleton_control)/rviz/tpgmm_test.rviz" if="$(arg enable_rviz)"/>
+
+  <!-- Test monitor node to display trajectory statistics -->
+  <node name="trajectory_monitor" pkg="exoskeleton_control" type="trajectory_monitor.py" output="screen" if="$(arg enable_monitor)">
+    <param name="update_rate" value="10.0"/>  <!-- Hz -->
+    <remap from="joints_trajectory" to="/test/joints_trajectory"/>
+    <remap from="dual_ankle_trajectory" to="/test/dual_ankle_trajectory"/>
+  </node>
+
+</launch>

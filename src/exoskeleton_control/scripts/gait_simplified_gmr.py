@@ -6,6 +6,7 @@ This script loads a trained TPGMM model and performs simplified trajectory recov
 following the logic from gait_example1time.ipynb more directly.
 """
 
+
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,8 +15,10 @@ from matplotlib.patches import Ellipse
 import os
 import sys
 
-# Add TaskParameterizedGaussianMixtureModels to Python path
-sys.path.append('TaskParameterizedGaussianMixtureModels')
+# Add TPGMM library to Python path
+workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if workspace_root not in sys.path:
+    sys.path.insert(0, workspace_root)
 
 
 def load_trained_model(model_path):
@@ -333,84 +336,180 @@ def plot_gaussian_models(model_data, predicted_trajectory=None, save_dir="plots"
 
 
 def plot_recovery_results(original_trajectory, predicted_trajectory, pca_results, feature_names, save_dir="plots"):
-    """Plot trajectory recovery results with PCA visualization."""
+    """Plot trajectory recovery results with bilateral trajectory comparison."""
     
     os.makedirs(save_dir, exist_ok=True)
     
-    # Plot 1: Time series comparison
-    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+    # Create comprehensive bilateral trajectory comparison
+    fig, axes = plt.subplots(3, 3, figsize=(24, 18))
     
     time_data = original_trajectory[:, 0]
     
-    # Plot key features over time
-    feature_plots = [
-        (1, 'Right Ankle X Pos'),
-        (2, 'Right Ankle Y Pos'), 
-        (3, 'Right Ankle X Vel'),
-        (4, 'Right Ankle Y Vel')
-    ]
+    # Top row: Right leg trajectory comparison
+    # Right ankle position X
+    axes[0, 0].plot(time_data, original_trajectory[:, 1], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[0, 0].plot(time_data, predicted_trajectory[:, 0], 'r--', label='Predicted', linewidth=2)
+    axes[0, 0].set_title('Right Ankle X Position', fontsize=14, fontweight='bold')
+    axes[0, 0].set_xlabel('Time (s)')
+    axes[0, 0].set_ylabel('Position (m)')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
     
-    for idx, (feat_idx, title) in enumerate(feature_plots):
-        row = idx // 2
-        col = idx % 2
-        
-        axes[row, col].plot(time_data, original_trajectory[:, feat_idx], 'b-', label='Original', linewidth=2)
-        axes[row, col].plot(time_data, predicted_trajectory[:, feat_idx-1], 'r--', label='Predicted', linewidth=2)
-        axes[row, col].set_title(title)
-        axes[row, col].set_xlabel('Time')
-        axes[row, col].set_ylabel('Value')
-        axes[row, col].legend()
-        axes[row, col].grid(True, alpha=0.3)
+    # Right ankle position Y
+    axes[0, 1].plot(time_data, original_trajectory[:, 2], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[0, 1].plot(time_data, predicted_trajectory[:, 1], 'r--', label='Predicted', linewidth=2)
+    axes[0, 1].set_title('Right Ankle Y Position', fontsize=14, fontweight='bold')
+    axes[0, 1].set_xlabel('Time (s)')
+    axes[0, 1].set_ylabel('Position (m)')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
     
-    # PCA plots
-    if 'position' in pca_results:
-        pca_pos = pca_results['position']['pca_data']
-        axes[0, 2].plot(pca_pos[:, 0], pca_pos[:, 1], 'g-', linewidth=2)
-        axes[0, 2].set_title('Position PCA (First 2 Components)')
-        axes[0, 2].set_xlabel(f'PC1 ({pca_results["position"]["explained_variance"][0]:.2%} variance)')
-        axes[0, 2].set_ylabel(f'PC2 ({pca_results["position"]["explained_variance"][1]:.2%} variance)')
-        axes[0, 2].grid(True, alpha=0.3)
-        axes[0, 2].axis('equal')
+    # Right ankle 2D trajectory
+    axes[0, 2].plot(original_trajectory[:, 1], original_trajectory[:, 2], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[0, 2].plot(predicted_trajectory[:, 0], predicted_trajectory[:, 1], 'r--', label='Predicted', linewidth=2)
+    axes[0, 2].plot(original_trajectory[0, 1], original_trajectory[0, 2], 'bo', markersize=8, label='Start')
+    axes[0, 2].plot(predicted_trajectory[0, 0], predicted_trajectory[0, 1], 'ro', markersize=6)
+    axes[0, 2].set_title('Right Ankle 2D Trajectory', fontsize=14, fontweight='bold')
+    axes[0, 2].set_xlabel('X Position (m)')
+    axes[0, 2].set_ylabel('Y Position (m)')
+    axes[0, 2].legend()
+    axes[0, 2].grid(True, alpha=0.3)
+    axes[0, 2].axis('equal')
     
-    if 'velocity' in pca_results:
-        pca_vel = pca_results['velocity']['pca_data']
-        axes[0, 3].plot(pca_vel[:, 0], pca_vel[:, 1], 'm-', linewidth=2)
-        axes[0, 3].set_title('Velocity PCA (First 2 Components)')
-        axes[0, 3].set_xlabel(f'PC1 ({pca_results["velocity"]["explained_variance"][0]:.2%} variance)')
-        axes[0, 3].set_ylabel(f'PC2 ({pca_results["velocity"]["explained_variance"][1]:.2%} variance)')
-        axes[0, 3].grid(True, alpha=0.3)
-        axes[0, 3].axis('equal')
+    # Middle row: Left leg trajectory comparison
+    # Left ankle position X
+    axes[1, 0].plot(time_data, original_trajectory[:, 5], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[1, 0].plot(time_data, predicted_trajectory[:, 4], 'r--', label='Predicted', linewidth=2)
+    axes[1, 0].set_title('Left Ankle X Position', fontsize=14, fontweight='bold')
+    axes[1, 0].set_xlabel('Time (s)')
+    axes[1, 0].set_ylabel('Position (m)')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
     
-    # Additional PCA comparison plots
-    if 'position' in pca_results:
-        # Plot original vs PCA reconstruction for positions
-        pos_original = pca_results['position']['original_data']
-        axes[1, 2].plot(pos_original[:, 0], pos_original[:, 1], 'b-', label='Right Ankle', linewidth=2)
-        axes[1, 2].plot(pos_original[:, 2], pos_original[:, 3], 'r-', label='Left Ankle', linewidth=2)
-        axes[1, 2].set_title('Original Position Trajectories')
-        axes[1, 2].set_xlabel('X Position (m)')
-        axes[1, 2].set_ylabel('Y Position (m)')
-        axes[1, 2].legend()
-        axes[1, 2].grid(True, alpha=0.3)
-        axes[1, 2].axis('equal')
+    # Left ankle position Y
+    axes[1, 1].plot(time_data, original_trajectory[:, 6], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[1, 1].plot(time_data, predicted_trajectory[:, 5], 'r--', label='Predicted', linewidth=2)
+    axes[1, 1].set_title('Left Ankle Y Position', fontsize=14, fontweight='bold')
+    axes[1, 1].set_xlabel('Time (s)')
+    axes[1, 1].set_ylabel('Position (m)')
+    axes[1, 1].legend()
+    axes[1, 1].grid(True, alpha=0.3)
     
-    if 'velocity' in pca_results:
-        # Plot original vs PCA reconstruction for velocities
-        vel_original = pca_results['velocity']['original_data']
-        axes[1, 3].plot(vel_original[:, 0], vel_original[:, 1], 'b-', label='Right Ankle', linewidth=2)
-        axes[1, 3].plot(vel_original[:, 2], vel_original[:, 3], 'r-', label='Left Ankle', linewidth=2)
-        axes[1, 3].set_title('Original Velocity Trajectories')
-        axes[1, 3].set_xlabel('X Velocity (m/s)')
-        axes[1, 3].set_ylabel('Y Velocity (m/s)')
-        axes[1, 3].legend()
-        axes[1, 3].grid(True, alpha=0.3)
-        axes[1, 3].axis('equal')
+    # Left ankle 2D trajectory
+    axes[1, 2].plot(original_trajectory[:, 5], original_trajectory[:, 6], 'b-', label='Original', linewidth=3, alpha=0.8)
+    axes[1, 2].plot(predicted_trajectory[:, 4], predicted_trajectory[:, 5], 'r--', label='Predicted', linewidth=2)
+    axes[1, 2].plot(original_trajectory[0, 5], original_trajectory[0, 6], 'bo', markersize=8, label='Start')
+    axes[1, 2].plot(predicted_trajectory[0, 4], predicted_trajectory[0, 5], 'ro', markersize=6)
+    axes[1, 2].set_title('Left Ankle 2D Trajectory', fontsize=14, fontweight='bold')
+    axes[1, 2].set_xlabel('X Position (m)')
+    axes[1, 2].set_ylabel('Y Position (m)')
+    axes[1, 2].legend()
+    axes[1, 2].grid(True, alpha=0.3)
+    axes[1, 2].axis('equal')
+    
+    # Bottom row: Velocity comparisons and combined view
+    # Right ankle velocity comparison
+    axes[2, 0].plot(time_data, original_trajectory[:, 3], 'b-', label='Original X Vel', linewidth=2, alpha=0.8)
+    axes[2, 0].plot(time_data, predicted_trajectory[:, 2], 'r--', label='Predicted X Vel', linewidth=2)
+    axes[2, 0].plot(time_data, original_trajectory[:, 4], 'g-', label='Original Y Vel', linewidth=2, alpha=0.8)
+    axes[2, 0].plot(time_data, predicted_trajectory[:, 3], 'orange', linestyle='--', label='Predicted Y Vel', linewidth=2)
+    axes[2, 0].set_title('Right Ankle Velocities', fontsize=14, fontweight='bold')
+    axes[2, 0].set_xlabel('Time (s)')
+    axes[2, 0].set_ylabel('Velocity (m/s)')
+    axes[2, 0].legend()
+    axes[2, 0].grid(True, alpha=0.3)
+    
+    # Left ankle velocity comparison
+    axes[2, 1].plot(time_data, original_trajectory[:, 7], 'b-', label='Original X Vel', linewidth=2, alpha=0.8)
+    axes[2, 1].plot(time_data, predicted_trajectory[:, 6], 'r--', label='Predicted X Vel', linewidth=2)
+    axes[2, 1].plot(time_data, original_trajectory[:, 8], 'g-', label='Original Y Vel', linewidth=2, alpha=0.8)
+    axes[2, 1].plot(time_data, predicted_trajectory[:, 7], 'orange', linestyle='--', label='Predicted Y Vel', linewidth=2)
+    axes[2, 1].set_title('Left Ankle Velocities', fontsize=14, fontweight='bold')
+    axes[2, 1].set_xlabel('Time (s)')
+    axes[2, 1].set_ylabel('Velocity (m/s)')
+    axes[2, 1].legend()
+    axes[2, 1].grid(True, alpha=0.3)
+    
+    # Combined bilateral trajectory comparison
+    axes[2, 2].plot(original_trajectory[:, 1], original_trajectory[:, 2], 'b-', label='Right Original', linewidth=3, alpha=0.8)
+    axes[2, 2].plot(predicted_trajectory[:, 0], predicted_trajectory[:, 1], 'r--', label='Right Predicted', linewidth=2)
+    axes[2, 2].plot(original_trajectory[:, 5], original_trajectory[:, 6], 'g-', label='Left Original', linewidth=3, alpha=0.8)
+    axes[2, 2].plot(predicted_trajectory[:, 4], predicted_trajectory[:, 5], 'orange', linestyle='--', label='Left Predicted', linewidth=2)
+    
+    # Mark start points
+    axes[2, 2].plot(original_trajectory[0, 1], original_trajectory[0, 2], 'bo', markersize=8, label='Right Start')
+    axes[2, 2].plot(original_trajectory[0, 5], original_trajectory[0, 6], 'go', markersize=8, label='Left Start')
+    
+    axes[2, 2].set_title('Bilateral Ankle Trajectories Comparison', fontsize=14, fontweight='bold')
+    axes[2, 2].set_xlabel('X Position (m)')
+    axes[2, 2].set_ylabel('Y Position (m)')
+    axes[2, 2].legend()
+    axes[2, 2].grid(True, alpha=0.3)
+    axes[2, 2].axis('equal')
     
     plt.tight_layout()
-    plt.savefig(f'{save_dir}/simplified_gmr_recovery_results.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'{save_dir}/bilateral_trajectory_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"Recovery results plots saved to {save_dir}/ directory")
+    # Create a separate PCA analysis plot
+    if 'position' in pca_results or 'velocity' in pca_results:
+        fig_pca, axes_pca = plt.subplots(2, 2, figsize=(16, 12))
+        
+        if 'position' in pca_results:
+            pca_pos = pca_results['position']['pca_data']
+            pos_original = pca_results['position']['original_data']
+            
+            # PCA trajectory
+            axes_pca[0, 0].plot(pca_pos[:, 0], pca_pos[:, 1], 'purple', linewidth=3, alpha=0.8)
+            axes_pca[0, 0].plot(pca_pos[0, 0], pca_pos[0, 1], 'o', color='purple', markersize=8, label='Start')
+            axes_pca[0, 0].set_title('Position PCA (First 2 Components)', fontsize=14, fontweight='bold')
+            axes_pca[0, 0].set_xlabel(f'PC1 ({pca_results["position"]["explained_variance"][0]:.2%} variance)')
+            axes_pca[0, 0].set_ylabel(f'PC2 ({pca_results["position"]["explained_variance"][1]:.2%} variance)')
+            axes_pca[0, 0].grid(True, alpha=0.3)
+            axes_pca[0, 0].legend()
+            
+            # Original position trajectories
+            axes_pca[0, 1].plot(pos_original[:, 0], pos_original[:, 1], 'b-', label='Right Ankle', linewidth=3, alpha=0.8)
+            axes_pca[0, 1].plot(pos_original[:, 2], pos_original[:, 3], 'r-', label='Left Ankle', linewidth=3, alpha=0.8)
+            axes_pca[0, 1].plot(pos_original[0, 0], pos_original[0, 1], 'bo', markersize=8)
+            axes_pca[0, 1].plot(pos_original[0, 2], pos_original[0, 3], 'ro', markersize=8)
+            axes_pca[0, 1].set_title('Predicted Position Trajectories', fontsize=14, fontweight='bold')
+            axes_pca[0, 1].set_xlabel('X Position (m)')
+            axes_pca[0, 1].set_ylabel('Y Position (m)')
+            axes_pca[0, 1].legend()
+            axes_pca[0, 1].grid(True, alpha=0.3)
+            axes_pca[0, 1].axis('equal')
+        
+        if 'velocity' in pca_results:
+            pca_vel = pca_results['velocity']['pca_data']
+            vel_original = pca_results['velocity']['original_data']
+            
+            # PCA velocity trajectory
+            axes_pca[1, 0].plot(pca_vel[:, 0], pca_vel[:, 1], 'teal', linewidth=3, alpha=0.8)
+            axes_pca[1, 0].plot(pca_vel[0, 0], pca_vel[0, 1], 'o', color='teal', markersize=8, label='Start')
+            axes_pca[1, 0].set_title('Velocity PCA (First 2 Components)', fontsize=14, fontweight='bold')
+            axes_pca[1, 0].set_xlabel(f'PC1 ({pca_results["velocity"]["explained_variance"][0]:.2%} variance)')
+            axes_pca[1, 0].set_ylabel(f'PC2 ({pca_results["velocity"]["explained_variance"][1]:.2%} variance)')
+            axes_pca[1, 0].grid(True, alpha=0.3)
+            axes_pca[1, 0].legend()
+            
+            # Original velocity trajectories
+            axes_pca[1, 1].plot(vel_original[:, 0], vel_original[:, 1], 'b-', label='Right Ankle', linewidth=3, alpha=0.8)
+            axes_pca[1, 1].plot(vel_original[:, 2], vel_original[:, 3], 'r-', label='Left Ankle', linewidth=3, alpha=0.8)
+            axes_pca[1, 1].plot(vel_original[0, 0], vel_original[0, 1], 'bo', markersize=8)
+            axes_pca[1, 1].plot(vel_original[0, 2], vel_original[0, 3], 'ro', markersize=8)
+            axes_pca[1, 1].set_title('Predicted Velocity Trajectories', fontsize=14, fontweight='bold')
+            axes_pca[1, 1].set_xlabel('X Velocity (m/s)')
+            axes_pca[1, 1].set_ylabel('Y Velocity (m/s)')
+            axes_pca[1, 1].legend()
+            axes_pca[1, 1].grid(True, alpha=0.3)
+            axes_pca[1, 1].axis('equal')
+        
+        plt.tight_layout()
+        plt.savefig(f'{save_dir}/pca_analysis_results.png', dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    print(f"Bilateral trajectory comparison plots saved to {save_dir}/ directory")
 
 
 def main():

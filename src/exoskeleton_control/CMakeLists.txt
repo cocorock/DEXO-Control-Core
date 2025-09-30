@@ -18,6 +18,7 @@ add_message_files(
   CrutchSensorData.msg
   GaitParams.msg
   JointsTrajectory.msg
+  DualAnkleTrajectory.msg
   ExoskeletonState.msg
   MotorStatus.msg
   Torques.msg
@@ -40,6 +41,8 @@ include_directories(
 install(PROGRAMS
   scripts/gait_planner_node.py
   scripts/trajectory_generator_node.py
+  scripts/gmr_trajectory_generator_node.py
+  scripts/tpgmm_trajectory_generator_node.py
   scripts/motor_control_node.py
   scripts/orchestrator_node.py
   scripts/dummy_crutches.py
