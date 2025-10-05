@@ -24,10 +24,10 @@ calibration:
 
 # Motor Hardware Configuration
 motors:
-  ids: [0x07, 0x09]              # CAN IDs: [Right hip, Right knee]
+  ids: [0x06, 0x08]              # CAN IDs: [Right hip, Right knee]
   joint_names: ['right_hip', 'right_knee']
   models: ['AK80_64', 'AK80_8']  # Motor models
-  directions: [1, -1]             # Direction multipliers
+  directions: [-1, 1]             # Direction multipliers
   
   # Joint angle limits in degrees [min, max]
   angle_limits_deg:
@@ -70,4 +70,4 @@ trajectory_generator:
   output_values:
     ready_state:   [0.0, 0.0, 0.0, 0.0]  # [hip_pos, knee_pos, hip_vel, knee_vel]
     walking_state: "trajectory_data"       # Use actual trajectory data
-    stopping_state: [-1.0, 1.0, 0.0, 0.0] # Safe stopping position
+    stopping_state: [1.0, -1.0, 0.0, 0.0] # Safe stopping position
