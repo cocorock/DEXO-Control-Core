@@ -845,12 +845,34 @@ class MotorControlNode:
                 if len(limits) == 1:  # After finding first limit, before second direction
                     rospy.loginfo(f"m:   Returning to equilibrium position before next direction...")
                     
-                    # Send zero command with light damping to let leg settle naturally
+                    # Calculate distance-proportional damping torque
+                    # Get current position corrected for motor direction
+                    current_position = state.p_out * config.direction
+                    distance_from_zero = abs(current_position)  # Absolute distance from equilibrium
+                    
+                    # Calculate base compensation torque from the just completed direction
+                    if direction > 0:
+                        # Just completed positive direction - use positive compensation torque
+                        base_compensation = abs(config.compensation_torque_positive)
+                    else:
+                        # Just completed negative direction - use negative compensation torque
+                        base_compensation = abs(config.compensation_torque_negative)
+                    
+                    # Calculate proportional damping torque based on distance from zero
+                    # farther away = higher torque, closer to zero = lower torque
+                    max_distance = max(abs(config.max_angle_rad), abs(config.min_angle_rad))  # Maximum expected distance
+                    distance_ratio = min(distance_from_zero / max_distance, 1.0)  # Normalize to [0, 1]
+                    damping_torque = base_compensation * 0.3 * distance_ratio  # Scale by distance
+                    
+                    # Apply torque in direction that brings motor back to zero
+                    torque_direction = -1.0 if current_position > 0 else 1.0  # Oppose current position
+                    
+                    # Send command with distance-proportional damping
                     state.p_in = 0.0        # Target zero position
                     state.v_in = 0.0        # Zero velocity
                     state.kp_in = 0.0       # Zero position gain (no position control)
-                    state.kd_in = 5      # Light damping as requested
-                    state.t_in = 0.0        # Zero torque
+                    state.kd_in = 5         # Maximum damping coefficient
+                    state.t_in = damping_torque * torque_direction * config.direction  # Distance-proportional damping torque
                     
                     motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
                     time.sleep(0.1)
@@ -878,19 +900,53 @@ class MotorControlNode:
             config.max_limit = max(limits)
             config.is_calibrated = True
             
-            # Move to center position
-            state.p_in = 0.0
-            state.v_in = 0.0
-            state.kp_in = config.gains['calibration']['kp']  # Use trajectory gains for positioning
-            state.kd_in = config.gains['trajectory']['kd']
-            state.t_in = 0.0
+            # Return to center position with enhanced damping (same approach as between limits)
+            rospy.loginfo(f"m:   Returning to center position after finding both limits...")
+            
+            # Calculate distance-proportional damping torque for final return to center
+            # Get current position corrected for motor direction
+            final_current_position = state.p_out * config.direction
+            final_distance_from_zero = abs(final_current_position)  # Absolute distance from equilibrium
+            
+            # Calculate base compensation torque from the last completed direction
+            if direction > 0:
+                # Last completed direction was positive - use positive compensation torque
+                final_base_compensation = abs(config.compensation_torque_positive)
+            else:
+                # Last completed direction was negative - use negative compensation torque
+                final_base_compensation = abs(config.compensation_torque_negative)
+            
+            # Calculate proportional damping torque based on distance from zero
+            # farther away = higher torque, closer to zero = lower torque
+            final_max_distance = max(abs(config.max_angle_rad), abs(config.min_angle_rad))  # Maximum expected distance
+            final_distance_ratio = min(final_distance_from_zero / final_max_distance, 1.0)  # Normalize to [0, 1]
+            final_damping_torque = final_base_compensation * 0.15 * final_distance_ratio  # Scale by distance (reduced to 15%)
+            
+            # Apply torque in direction that brings motor back to zero
+            final_torque_direction = -1.0 if final_current_position > 0 else 1.0  # Oppose current position
+            
+            # Send command with distance-proportional damping
+            state.p_in = 0.0        # Target zero position
+            state.v_in = 0.0        # Zero velocity
+            state.kp_in = 0.0       # Zero position gain (no position control)
+            state.kd_in = 5         # Maximum damping coefficient
+            state.t_in = final_damping_torque * final_torque_direction * config.direction  # Distance-proportional damping torque
             
             motor_driver.pack_cmd(self.can_channel, controller, state, debug_flag=self.debug_flag)
             time.sleep(0.1)
-            # Read response after moving to center
+            # Read response after equilibrium command
             motor_driver.read_motor_status(self.can_channel, controller, state, 
-                                         max_attempts=3, timeout_ms=100, debug_flag=self.debug_flag)
-            time.sleep(1.0)  # Allow time to reach center
+                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+            
+            # Wait 2.5 seconds for leg to settle to center position
+            rospy.loginfo(f"m:   Waiting 2.5 seconds for equilibrium at center...")
+            time.sleep(2.5)
+            
+            # Read final position after settling
+            motor_driver.read_motor_status(self.can_channel, controller, state, 
+                                         max_attempts=3, timeout_ms=50, debug_flag=self.debug_flag)
+            corrected_center_pos = state.p_out * config.direction
+            rospy.loginfo(f"m:   Final center position: {math.degrees(corrected_center_pos):.1f}° (corrected)")
             
             rospy.loginfo(f"m: Motor {motor_id} calibrated successfully:")
             rospy.loginfo(f"m:   Limits: {math.degrees(config.min_limit):.3f} to {math.degrees(config.max_limit):.3f} °")
